@@ -1,6 +1,6 @@
 # Improve session-handoff: first tests, split, type-check, README
 
-Status: ready-for-agent
+Status: resolved
 Blocked by: 01
 
 Apply the rules in [spec.md](../spec.md) to `session-handoff` (446-line `hooks/register.tsx`; no tests today).
@@ -20,3 +20,7 @@ Apply the rules in [spec.md](../spec.md) to `session-handoff` (446-line `hooks/r
 6. **README** reshaped to the template.
 
 Audit items H1-H17 in [research/02](../../codebase-improvements/research/02-audit-structure-and-readability.md). Step 2 matters: this is the riskiest split and starts with no safety net.
+
+## Comments
+
+Already delivered in a7ae078 (first tests, split into argv/data/document/trigger/view, tsconfig, README), 99fc6ae (review fixes) and 44b02d6 (run state in one object, H15).
