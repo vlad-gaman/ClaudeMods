@@ -103,7 +103,7 @@ async function runHandoff(
     const forked = await Promise.race([
       $.model.fork({ prompt: SUMMARY_PROMPT }),
       $.clock.sleep(SUMMARY_TIMEOUT_MS).then(() => null),
-    ]).catch(() => null)
+    ]).catch(() => null) // a failed fork is treated as no summary: the fallback is used
     const narrative =
       forked && forked.isAnswered && forked.text.trim() !== ''
         ? forked.text.trim()

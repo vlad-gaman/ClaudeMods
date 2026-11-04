@@ -15,7 +15,7 @@ Four buttons sit under the steps. They work once the handoff is saved:
 
 The handoff is a Markdown file: the model's summary (goal, current state, decisions, open problems, next steps), or the last requests when the model does not answer within 120 seconds, then files changed, files read, skills used, tools used, links and recent user requests.
 
-## Triggers
+It starts in one of three ways (the trigger, named in the file):
 
 - `command`: you type `/handoff-session`.
 - `cache`: 55 minutes after a turn ends, 5 minutes before the prompt cache goes cold. A new turn cancels it. It is skipped while an earlier handoff is still showing.

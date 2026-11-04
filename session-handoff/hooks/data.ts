@@ -41,10 +41,9 @@ export const RECENT_REQUESTS = 6
 // How many links the handoff lists.
 export const MAX_LINKS = 40
 
-// A handoff shorter than this many characters is passed to a new chat as the
+// A handoff of up to this many characters is passed to a new chat as the
 // prompt itself; a longer one is passed by path. The app takes at most 14,336
-// characters of prompt, and URL-encoding makes the text longer, so the
-// cut-off sits well below that.
+// characters of prompt; why 8000 was chosen is not recorded.
 export const INLINE_PROMPT_MAX = 8000
 
 export const SUMMARY_PROMPT =

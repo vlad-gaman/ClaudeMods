@@ -1,4 +1,4 @@
-import type { EngineInterface as Engine } from 'claude-code'
+import type { EngineInterface as Engine, RenderSurface } from 'claude-code'
 
 import type { HandoffStep, HandoffView } from '../types'
 import { deleteArgv, newChatArgv, newChatUrl, openArgv, osOf } from './argv'
@@ -21,7 +21,7 @@ export function band(
   $: Engine,
   { Box, Button, Text }: Parts,
   current: HandoffView,
-  surface: string,
+  surface: RenderSurface,
   onClose: () => Promise<void>,
 ) {
   const isReady = current.phase === 'ready'
@@ -36,7 +36,7 @@ export function band(
 
   const copy = async () => {
     const text = await $.fs.read(current.path ?? '')
-    const r = await $.ui.copy({ text: String(text), surface: surface as never })
+    const r = await $.ui.copy({ text: String(text), surface })
     $.ui.toast(r.isCopied ? 'Handoff copied.' : 'Could not copy the handoff.')
   }
 
