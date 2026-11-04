@@ -19,6 +19,8 @@ The words the code uses. Use these terms in names, comments, issues and replies.
 - **Surface**: where the session is shown: `desktop`, `vscode`, `mobile`.
 - **Toast**: a short message from `$.ui.toast`.
 - **Slash command**: a command a mod registers with `$.command.register` (`/switchboard`, `/session-panel`, `/usage-band`, `/handoff-session`).
+- **Switch** (Switchboard): the control that enables or disables a mod.
+- **Note** (Switchboard): the one-line message shown after the last action.
 - **Eye** (Switchboard): the control that closes or reopens a mod's pane without disabling the mod.
 
 ## Session
@@ -32,3 +34,5 @@ The words the code uses. Use these terms in names, comments, issues and replies.
 - **Skill**: a skill or prompt file run by the Skill tool or typed as a slash command. Built-in and MCP commands are not skills.
 - **To-do**: one item of the session's task list, with status `pending`, `in_progress` or `completed`. Set by `update_plan`, `TodoWrite`, `TaskCreate` or `TaskUpdate`.
 - **Context files**: the memory files loaded into the session, listed with their token counts.
+- **Handoff** (Session Handoff): a document that summarises a session, with a prompt to continue it in a new chat.
+- **Trigger** (Session Handoff): what starts a handoff: the slash command (`command`), the prompt cache about to go cold (`cache`), or context nearing its limit (`context`).
