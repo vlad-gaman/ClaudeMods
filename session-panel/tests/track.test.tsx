@@ -54,7 +54,7 @@ test('a skill run by the Skill tool is listed', async ($, on) => {
 test('a skill typed as a slash command is listed', async ($, on) => {
   engine(on)
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
-  await $.command.run({ command: 'tdd' })
+  await $.command.run({ command: 'tdd' } as never)
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Text', text: /^\/tdd$/ }))?.text).toBe('/tdd')
@@ -64,7 +64,7 @@ test('a skill typed as a slash command is listed', async ($, on) => {
 test('built-in, MCP, unknown and its own commands are not listed as skills', async ($, on) => {
   engine(on)
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
-  for (const command of ['clear', 'jira', 'nope', 'session-panel']) await $.command.run({ command })
+  for (const command of ['clear', 'jira', 'nope', 'session-panel']) await $.command.run({ command } as never)
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Text', text: /No skill used yet/ }))?.text).toBe('No skill used yet.')

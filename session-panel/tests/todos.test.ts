@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { applyTodoTool } from '../hooks/register'
+import { applyTodoTool } from '../hooks/todos'
 
 const PLAN = 'mcp__ccd_turn__update_plan'
 const WRAP = 'mcp__ccd_turn__wrap_up'
@@ -9,7 +9,7 @@ const items = [
   { content: 'a', status: 'in_progress' },
   { content: 'b', status: 'pending' },
   { content: 'c', status: 'pending' },
-]
+] as const
 
 test('update_plan items replaces the list', () => {
   const out = applyTodoTool([todo('9', 'old', 'pending')], PLAN, { items })
@@ -39,7 +39,7 @@ test('wrap_up checks everything off', () => {
 })
 
 test('TodoWrite replaces the list', () => {
-  const out = applyTodoTool([todo('x', 'old', 'pending')], 'TodoWrite', { todos: [{ content: 'new', status: 'pending' }] })
+  const out = applyTodoTool([todo('x', 'old', 'pending')], 'TodoWrite', { todos: [{ content: 'new', status: 'pending' as const }] })
   expect(out).toEqual([todo('0', 'new', 'pending')])
 })
 
