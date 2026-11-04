@@ -34,3 +34,10 @@ Shared code between mods (each stays self-contained and independently installabl
 - The engine bundles sibling imports from `hooks/register.tsx`.
 - `claude plugin test .` still finds tests after they move into `tests/`.
 - `claude --plugin-dir ./<mod>` run interactively writes `.claude-plugin/types/` into the repo folder (the official docs say so; the research only saw it for engine-owned folders). Fallback: the scratch-copy recipe in [research/01](../codebase-improvements/research/01-test-and-typecheck-loop.md).
+
+### Result (verified in ticket 01, 2026-11-04)
+
+- **Sibling imports: hold.** `hooks/register.tsx` imports `./figures` and `./view` and the hooks and tests run.
+- **Tests in `tests/`: hold.** `claude plugin test .` finds them.
+- **`--plugin-dir` writes types: holds, interactive only.** `claude --plugin-dir ./usage-band -p "…"` wrote nothing; an interactive `claude --plugin-dir ./usage-band` wrote `.claude-plugin/types/` (with its own `.gitignore` of `*`). After that, `npx -p typescript tsc -p ./usage-band --noEmit` runs.
+- **Test stubs.** A hook test that mounts the band needs `session.usage`, `session.start` (returning `{ cwd }`), `command.register` and `session.surfaces` stubs, and `session.start` must run first (see the [bug note](bugs/usage-band-hide-button.md)).

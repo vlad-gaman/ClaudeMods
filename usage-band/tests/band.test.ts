@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'claude-code/testing'
 
-import { severity } from '../hooks/register'
+import { severity } from '../hooks/figures'
 
 const BAND = {
   component: 'AbovePrompt',
@@ -21,11 +21,17 @@ test('the band shows chat, session and week usage on every surface', async ($, o
   on('session.measure', ($, e) => ({ changed: e.changed }))
   mock.clock(on)
   on('session.surfaces', () => ({ value: ['terminal'] }))
+  on('session.usage', () => ({
+    value: { context: MEASURE.context, rateLimits: [...MEASURE.rateLimits], cost: MEASURE.cost, startedAt: 1 },
+  }))
   on('ui.status', () => ({ value: undefined }))
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
-    return h(Text, {}, 'engine')
+    return h(Text, {}, 'engine') as never
   })
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', () => ({ value: undefined }) as never)
+  await $.session.start({ cwd: '.' } as never)
   await $.session.measure({ ...MEASURE, rateLimits: [...MEASURE.rateLimits], changed: [...MEASURE.changed] })
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'usage-band', surface, ...BAND })

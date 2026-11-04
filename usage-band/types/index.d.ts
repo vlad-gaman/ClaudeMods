@@ -5,7 +5,7 @@ export type Figures = {
   contextTokens?: number
   contextWindow?: number
   costUsd?: number
-  session?: Window
+  fiveHour?: Window
   week?: Window
 }
 
