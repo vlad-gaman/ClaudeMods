@@ -1,6 +1,6 @@
 # Improve switchboard: tests, split, type-check, README
 
-Status: ready-for-agent
+Status: resolved
 Blocked by: 01
 
 Apply the rules in [spec.md](../spec.md) to `switchboard` (293-line `hooks/register.tsx`).
@@ -13,3 +13,7 @@ Apply the rules in [spec.md](../spec.md) to `switchboard` (293-line `hooks/regis
 6. **README** (new) in the template. Say in it that `command.register`, `ui.open` and `PANE` must stay literal in other mods' `register.tsx`.
 
 Audit items S1-S18 in [research/02](../../codebase-improvements/research/02-audit-structure-and-readability.md). The `JSON.parse` outside a try block at `:117` (S5) would be a behaviour change: log it, do not fix.
+
+## Comments
+
+Already delivered in c89d7c5 (tests moved to tests/, data/names/source/view split, README). The JSON.parse-outside-try question is logged in bugs/switchboard-pane-watch.md.
