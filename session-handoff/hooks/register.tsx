@@ -27,8 +27,13 @@ import { band } from './view'
 
 const view = atom({ plugin: 'session-handoff', key: 'view' } as const, null)
 
-let runId = 0
-let isRunning = false
+/** State of one mod instance, created per `register` call. */
+type Run = {
+  id: number
+  isRunning: boolean
+  cacheTimer: { cancel: () => void } | null
+  isContextArmed: boolean
+}
 
 const patch = (
   $: Engine,
@@ -38,11 +43,12 @@ const patch = (
 
 async function runHandoff(
   $: Engine,
+  run: Run,
   trigger: HandoffView['trigger'],
 ) {
-  if (isRunning) return
-  isRunning = true
-  const id = ++runId
+  if (run.isRunning) return
+  run.isRunning = true
+  const id = ++run.id
   const steps: HandoffStep[] = STEPS.map(name => ({
     label: STEP_LABELS[name],
     status: 'pending',
@@ -164,13 +170,12 @@ async function runHandoff(
       ),
     }))
   } finally {
-    isRunning = false
+    run.isRunning = false
   }
 }
 
 export const register: Register = on => {
-  let cacheTimer: { cancel: () => void } | null = null
-  let isContextArmed = true
+  const run: Run = { id: 0, isRunning: false, cacheTimer: null, isContextArmed: true }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -181,15 +186,15 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'handoff-session' }, async $ => {
-    if (isRunning) return { text: 'A handoff is already being written.' }
-    void runHandoff($, 'command')
+    if (run.isRunning) return { text: 'A handoff is already being written.' }
+    void runHandoff($, run, 'command')
     return { text: 'Writing the handoff. Progress is shown above the prompt.' }
   })
 
   on('turn.start', ($, e, next) => {
     if (e.agentId === undefined) {
-      cacheTimer?.cancel()
-      cacheTimer = null
+      run.cacheTimer?.cancel()
+      run.cacheTimer = null
     }
     return next(e)
   })
@@ -199,23 +204,23 @@ export const register: Register = on => {
     if (e.agentId !== undefined) return result
 
     // Trigger 2: the cache goes cold `RUN_BEFORE_COLD_MIN` minutes from now.
-    cacheTimer?.cancel()
+    run.cacheTimer?.cancel()
     const wait = Math.max(1, CACHE_TTL_MIN - RUN_BEFORE_COLD_MIN) * 60000
-    cacheTimer = $.clock.after(wait, () => {
-      cacheTimer = null
+    run.cacheTimer = $.clock.after(wait, () => {
+      run.cacheTimer = null
       void (async () => {
-        if (isRunning) return
+        if (run.isRunning) return
         const current = await read($, view)
         if (current && !current.isDismissed) return
-        await runHandoff($, 'cache')
+        await runHandoff($, run, 'cache')
       })()
     })
 
     // Trigger 3: the context passes the threshold (re-armed once it falls).
     const { context } = await $.session.usage()
-    const trigger = contextTrigger(isContextArmed, context.tokens ?? 0)
-    isContextArmed = trigger.isArmed
-    if (trigger.isFired) void runHandoff($, 'context')
+    const trigger = contextTrigger(run.isContextArmed, context.tokens ?? 0)
+    run.isContextArmed = trigger.isArmed
+    if (trigger.isFired) void runHandoff($, run, 'context')
     return result
   })
 
