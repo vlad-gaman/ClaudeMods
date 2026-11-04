@@ -1,6 +1,6 @@
 # Improve session-panel: tests, split, type-check, README
 
-Status: ready-for-agent
+Status: resolved
 Blocked by: 01
 
 Apply the rules in [spec.md](../spec.md) to `session-panel` (419-line `hooks/register.tsx`).
@@ -13,3 +13,7 @@ Apply the rules in [spec.md](../spec.md) to `session-panel` (419-line `hooks/reg
 6. **README** (new) in the template.
 
 Audit items P1-P17 in [research/02](../../codebase-improvements/research/02-audit-structure-and-readability.md).
+
+## Comments
+
+Already delivered in 8d84c97 (tests moved to tests/, split into data/names/todos/view, README) and 3644241 (review fixes).
