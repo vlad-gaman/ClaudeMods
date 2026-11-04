@@ -1,6 +1,6 @@
 # Improve usage-band: tests, split, type-check, README
 
-Status: ready-for-agent
+Status: resolved
 Blocked by:
 
 Apply the rules in [spec.md](../spec.md) to `usage-band` (273-line `hooks/register.tsx`). Do the steps in order.
@@ -15,3 +15,7 @@ Apply the rules in [spec.md](../spec.md) to `usage-band` (273-line `hooks/regist
 8. Log the Hide-button question (see the spec's out-of-scope list) as a bug note.
 
 Audit items U1-U14 in [research/02](../../codebase-improvements/research/02-audit-structure-and-readability.md).
+
+## Comments
+
+Already delivered in 2eb342d (tests, split into figures.ts/view.tsx, renames, tsconfig, README) and 143d5e4 (review fixes). Hide-button question logged in bugs/usage-band-hide-button.md.
