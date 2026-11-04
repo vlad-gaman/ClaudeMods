@@ -90,6 +90,18 @@ async function trackConnector($: EngineInterface, server: string, tool: string) 
   }
 }
 
+// The to-do list follows the task-list tools; the rules live in applyTodoTool.
+// TaskCreate's new id is in its result, so it is read after the call; the others change the list first.
+async function trackTodos<R>($: EngineInterface, tool: string, input: TodoInput, call: () => Promise<R>) {
+  if (tool !== 'TaskCreate') {
+    await update($, todos, l => applyTodoTool(l, tool, input))
+    return call()
+  }
+  const ran = await call()
+  await update($, todos, l => applyTodoTool(l, tool, input, ran as TodoResult | undefined))
+  return ran
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -129,21 +141,12 @@ export const register: Register = on => {
     const mcp = mcpOf(tool)
     if (mcp.server) await trackConnector($, mcp.server, mcp.tool)
 
-    // The to-do list follows the task-list tools; the rules live in applyTodoTool.
-    // TaskCreate's new id is in its result, so it is read after the call; the others change the list first.
-    if (!TODO_TOOLS.has(tool)) return next(e)
-    if (tool !== 'TaskCreate') {
-      await update($, todos, l => applyTodoTool(l, tool, e as TodoInput))
-      return next(e)
-    }
-    const ran = await next(e)
-    await update($, todos, l => applyTodoTool(l, tool, e as TodoInput, ran as TodoResult | undefined))
-    return ran
+    return TODO_TOOLS.has(tool) ? trackTodos($, tool, e as TodoInput, () => next(e)) : next(e)
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const parts = $.ui.resolve(e)
-    const [t, c, f, i, k, h] = await Promise.all([
+    const [todoList, connectorList, fileList, iconList, skillList, sessionTitle] = await Promise.all([
       read($, todos),
       read($, connectors),
       read($, contextFiles),
@@ -151,6 +154,6 @@ export const register: Register = on => {
       read($, skills),
       read($, title),
     ])
-    return pane(parts, 'Svg' in parts ? parts.Svg : undefined, { title: h, todos: t, connectors: c, contextFiles: f, icons: i, skills: k })
+    return pane(parts, 'Svg' in parts ? parts.Svg : undefined, { title: sessionTitle, todos: todoList, connectors: connectorList, contextFiles: fileList, icons: iconList, skills: skillList })
   })
 }
