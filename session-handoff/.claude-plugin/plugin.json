@@ -1,0 +1,7 @@
+{
+  "name": "session-handoff",
+  "version": "0.1.0",
+  "description": "Writes a handoff file for the current session automatically on /handoff-session, 5 minutes before the prompt cache goes cold, and when the context passes 250k tokens.",
+  "types": "./types/index.d.ts",
+  "lucide": "file-text"
+}

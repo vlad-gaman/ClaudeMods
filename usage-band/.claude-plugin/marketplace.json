@@ -1,0 +1,5 @@
+{
+  "name": "local-mods",
+  "owner": { "name": "Vlad Gaman" },
+  "plugins": [{ "name": "usage-band", "source": "./" }]
+}
