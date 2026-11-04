@@ -1,8 +1,9 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, SessionUsage } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
 
 import type { ChatTokens } from '../types'
 import { isCurrent, line, toFigures } from './figures'
+import type { Measured } from './figures'
 import { band } from './view'
 
 const figures = atom({ plugin: 'usage-band', key: 'figures' } as const, null)
@@ -17,7 +18,7 @@ const loadCompactWindow = async ($: EngineInterface) => {
   await update($, compactWindow, () => usage.context.breakdown?.rawMaxTokens ?? 0)
 }
 
-const storeFigures = async ($: EngineInterface, usage: Pick<SessionUsage, 'context' | 'rateLimits' | 'cost'>) => {
+const storeFigures = async ($: EngineInterface, usage: Measured) => {
   const limit = await read($, compactWindow)
   await update($, figures, () => toFigures(usage, limit))
 }
@@ -117,7 +118,7 @@ export const register: Register = on => {
     const now = await $.clock.now()
     const parts = $.ui.resolve(e)
     const rest = await next(e)
-    const mine = band(parts, f, c, now, () => void update($, isHidden, () => true))
+    const mine = band(parts, f, c, now, () => update($, isHidden, () => true))
 
     // Pass control on, so other mods' bands draw too.
     return <parts.Box flexDirection="column">{rest}{mine}</parts.Box>

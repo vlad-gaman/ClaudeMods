@@ -8,10 +8,9 @@ const toWindow = (limits: SessionRateLimit[], kind: string): Window | undefined 
   return limit && { percentUsed: limit.percentUsed, resetsAt: limit.resetsAt }
 }
 
-export const toFigures = (
-  u: Pick<SessionUsage, 'context' | 'rateLimits' | 'cost'>,
-  limit?: number | null,
-): Figures => ({
+export type Measured = Pick<SessionUsage, 'context' | 'rateLimits' | 'cost'>
+
+export const toFigures = (u: Measured, limit?: number | null): Figures => ({
   contextPercent: u.context.percent,
   contextTokens: u.context.tokens,
   contextWindow: limit ? Math.min(limit, u.context.window) : u.context.window,
@@ -36,8 +35,10 @@ export const until = (resetsAt: string | undefined, now: number): string => {
   return d > 0 ? `${d}d${h}h` : h > 0 ? `${h}h${m}m` : `${m}m`
 }
 
+export type Severity = 'success' | 'warning' | 'error'
+
 // Green below `warnAt`, yellow from `warnAt` to `errorAt`, red above `errorAt`.
-export const severity = (percent: number | undefined, warnAt: number, errorAt: number) =>
+export const severity = (percent: number | undefined, warnAt: number, errorAt: number): Severity | undefined =>
   percent === undefined ? undefined : percent > errorAt ? 'error' : percent >= warnAt ? 'warning' : 'success'
 
 const contextColor = (percent: number | undefined) => severity(percent, 25, 40)
@@ -64,7 +65,7 @@ export const hitPercent = (c: ChatTokens | null): number | undefined =>
 const contextPercent = (f: Figures) => (f.contextPercent !== undefined ? `${f.contextPercent}%` : 'n/a')
 const contextText = (f: Figures) =>
   f.contextTokens !== undefined && f.contextWindow ? ` ${compact(f.contextTokens)}/${compact(f.contextWindow)}` : ''
-const tokensText = (c: ChatTokens) => `↑${compact(c.up)} ↓${compact(c.down)}`
+const sessionText = (c: ChatTokens) => `↑${compact(c.up)} ↓${compact(c.down)}`
 const costText = (f: Figures) => (f.costUsd !== undefined ? `$${f.costUsd.toFixed(2)}` : undefined)
 
 const percentText = (w: Window | undefined) => (w ? `${trim(w.percentUsed)}%` : 'n/a')
@@ -95,14 +96,14 @@ export const cacheState = (f: Figures, c: ChatTokens | null, now: number): Cache
 }
 
 // One figure of the band or status line: a label, its value, and a dim detail after it.
-export type Segment = { key: string; label: string; value: string; detail: string; color?: string }
+export type Segment = { key: string; label: string; value: string; detail: string; color?: Severity }
 
 export const segments = (f: Figures, c: ChatTokens | null, now: number): Segment[] => {
   const cost = costText(f)
 
   return [
     { key: 'context', label: 'Context', value: contextPercent(f), detail: contextText(f), color: contextColor(f.contextPercent) },
-    ...(c ? [{ key: 'session', label: 'Session', value: tokensText(c), detail: '' }] : []),
+    ...(c ? [{ key: 'session', label: 'Session', value: sessionText(c), detail: '' }] : []),
     ...(cost ? [{ key: 'cost', label: 'Cost', value: cost, detail: '' }] : []),
     {
       key: 'five-hour',

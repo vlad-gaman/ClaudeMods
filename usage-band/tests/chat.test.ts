@@ -7,9 +7,12 @@ const BAND = {
 
 const TURN = {
   answer: 'ok',
-  text: 'ok',
-  usage: { input_tokens: 100, cache_creation_input_tokens: 0, cache_read_input_tokens: 900, output_tokens: 50 },
-} as never
+  durationMs: 1,
+  isAborted: false,
+  turnId: 't1',
+  reason: 'answer',
+  usage: { model: 'test-model', input_tokens: 100, cache_creation_input_tokens: 0, cache_read_input_tokens: 900, output_tokens: 50 },
+} as const
 
 test('the chat count adds up over turns and starts over when the session restarts', async ($, on) => {
   let startedAt = 1
@@ -19,14 +22,11 @@ test('the chat count adds up over turns and starts over when the session restart
     value: { context: { tokens: 10, window: 100, percent: 10 }, rateLimits: [], startedAt },
   }))
   on('ui.status', () => ({ value: undefined }))
-  on('ui.render', ($, e) => {
-    const { Text } = $.ui.resolve(e)
-    return h(Text, {}, 'engine') as never
-  })
-  on('turn.complete', ($, e) => ({ text: 'ok', usage: e.usage }) as never)
+  on('ui.render', () => ({ type: 'Text', children: ['engine'] }))
+  on('turn.complete', ($, e) => ({ text: 'ok', usage: e.usage }))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('command.register', () => ({ value: undefined }) as never)
-  await $.session.start({ cwd: '.' } as never)
+  on('command.register', () => ({ value: { command: 'usage-band' } }))
+  await $.session.start({ cwd: '.', surface: 'terminal', isInteractive: true })
 
   const shown = async () => {
     const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'terminal', ...BAND })

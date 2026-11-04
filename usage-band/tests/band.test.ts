@@ -25,13 +25,10 @@ test('the band shows chat, session and week usage on every surface', async ($, o
     value: { context: MEASURE.context, rateLimits: [...MEASURE.rateLimits], cost: MEASURE.cost, startedAt: 1 },
   }))
   on('ui.status', () => ({ value: undefined }))
-  on('ui.render', ($, e) => {
-    const { Text } = $.ui.resolve(e)
-    return h(Text, {}, 'engine') as never
-  })
+  on('ui.render', () => ({ type: 'Text', children: ['engine'] }))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('command.register', () => ({ value: undefined }) as never)
-  await $.session.start({ cwd: '.' } as never)
+  on('command.register', () => ({ value: { command: 'usage-band' } }))
+  await $.session.start({ cwd: '.', surface: 'terminal', isInteractive: true })
   await $.session.measure({ ...MEASURE, rateLimits: [...MEASURE.rateLimits], changed: [...MEASURE.changed] })
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ plugin: 'usage-band', surface, ...BAND })

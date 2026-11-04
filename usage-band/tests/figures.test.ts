@@ -12,7 +12,7 @@ const USAGE = {
     { kind: 'seven_day', percentUsed: 91 },
   ],
   cost: { usd: 3.4 },
-} as never
+}
 
 test('toFigures reads the context, cost, 5h and week from the usage', () => {
   expect(toFigures(USAGE)).toEqual({
@@ -33,7 +33,7 @@ test('toFigures measures against the compact window when it is smaller', () => {
 })
 
 test('toFigures leaves out a rate limit the account does not report', () => {
-  const figures = toFigures({ context: { tokens: 1, window: 2, percent: 50 }, rateLimits: [] } as never)
+  const figures = toFigures({ context: { tokens: 1, window: 2, percent: 50 }, rateLimits: [] })
 
   expect(figures.fiveHour).toBeUndefined()
   expect(figures.week).toBeUndefined()
