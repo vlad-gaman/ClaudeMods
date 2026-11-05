@@ -175,15 +175,15 @@ async function runHandoff(
   }
 }
 
-// An option the user left unset or set to something unusable falls back to
-// the default.
-const positive = (value: unknown, fallback: number) =>
-  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
+// The engine checks type and `min` against plugin.json and fills in defaults
+// before `register` runs; this only narrows the type.
+const number = (value: unknown, fallback: number) =>
+  typeof value === 'number' ? value : fallback
 
 export const register: Register = (on, options) => {
-  const cacheMinutes = positive(options.cache_minutes, CACHE_TTL_MIN)
-  const contextTokens = positive(options.context_tokens, CONTEXT_THRESHOLD)
-  const leadMinutes = positive(options.lead_minutes, RUN_BEFORE_COLD_MIN)
+  const cacheMinutes = number(options.cache_minutes, CACHE_TTL_MIN)
+  const contextTokens = number(options.context_tokens, CONTEXT_THRESHOLD)
+  const leadMinutes = number(options.lead_minutes, RUN_BEFORE_COLD_MIN)
   const run: Run = { id: 0, isRunning: false, cacheTimer: null, isContextArmed: true }
 
   on('session.start', async ($, e, next) => {

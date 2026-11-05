@@ -28,7 +28,7 @@ The words the code uses. Use these terms in names, comments, issues and replies.
 - **Session**: one run of Claude Code. Also called the **chat** in Usage Band.
 - **Turn**: one prompt and its answer.
 - **Context window**: the model's token capacity. **Context** is how much of it is used. The **compact window** is the size auto-compact measures against.
-- **Prompt cache**: the cached prompt, kept alive for one hour (`CACHE_TTL_MS`). It is **warm** while time remains and **cold** after.
+- **Prompt cache**: the cached prompt, kept alive for one hour (`CACHE_TTL_MS`; Session Handoff takes it from its `cache_minutes` option, default 60). It is **warm** while time remains and **cold** after.
 - **5h** and **Week**: the two rate-limit windows (`five_hour`, `seven_day`).
 - **Connector**: an MCP server a tool call came from (`mcp__<server>__<tool>`). Session Panel lists the ones used.
 - **Skill**: a skill or prompt file run by the Skill tool or typed as a slash command. Built-in and MCP commands are not skills.

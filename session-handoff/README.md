@@ -1,6 +1,6 @@
 # session-handoff
 
-Writes a handoff file for the current session automatically on /handoff-session, 5 minutes before the prompt cache goes cold, and when the context passes 250k tokens (the times and the threshold are options). The handoff summarises the session and holds a prompt to continue it in a new chat. Handoffs are saved in `~/.claude/handoffs/`.
+Writes a handoff file for the current session automatically on /handoff-session, shortly before the prompt cache goes cold, and when the context grows past a token threshold. The handoff summarises the session and holds a prompt to continue it in a new chat. Handoffs are saved in `~/.claude/handoffs/`.
 
 ## What you see
 
@@ -29,7 +29,7 @@ Set in `/config`. The defaults are the values above.
 - `lead_minutes` (5): the cache handoff runs this long before the cache goes cold. The wait is `cache_minutes - lead_minutes`, at least 1 minute.
 - `context_tokens` (250000): the context handoff fires past this many tokens.
 
-A value that is not a positive number is ignored and the default is used.
+Each must be a number of at least 1; the app refuses a lower value.
 
 ## Commands
 
