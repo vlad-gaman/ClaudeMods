@@ -1,6 +1,6 @@
 # session-handoff: the README promised options the mod does not read
 
-Status: needs-triage
+Status: resolved
 
 Found while doing [04-session-handoff](../issues/04-session-handoff.md). Not fixed there (behaviour-preserving only).
 
@@ -9,3 +9,7 @@ The old README said "Thresholds and the cache lifetime are set in the mod's opti
 ## Also noticed
 
 The `plugin.json` description says "5 minutes before the prompt cache goes cold", which holds only while the cache lifetime stays 60 minutes (`CACHE_TTL_MIN - RUN_BEFORE_COLD_MIN` is the wait).
+
+## Resolution
+
+Options added: `cache_minutes` (60), `lead_minutes` (5), `context_tokens` (250000) in `plugin.json` `userConfig`, read in `register`. Defaults keep the old behaviour. Tests in `tests/handoff.test.tsx`. The description no longer states fixed numbers.

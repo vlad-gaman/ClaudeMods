@@ -1,6 +1,6 @@
 # session-handoff
 
-Writes a handoff file for the current session automatically on /handoff-session, 5 minutes before the prompt cache goes cold, and when the context passes 250k tokens. The handoff summarises the session and holds a prompt to continue it in a new chat. Handoffs are saved in `~/.claude/handoffs/`.
+Writes a handoff file for the current session automatically on /handoff-session, 5 minutes before the prompt cache goes cold, and when the context passes 250k tokens (the times and the threshold are options). The handoff summarises the session and holds a prompt to continue it in a new chat. Handoffs are saved in `~/.claude/handoffs/`.
 
 ## What you see
 
@@ -18,8 +18,18 @@ The handoff is a Markdown file: the model's summary (goal, current state, decisi
 It starts in one of three ways (the trigger, named in the file):
 
 - `command`: you type `/handoff-session`.
-- `cache`: 55 minutes after a turn ends, 5 minutes before the prompt cache goes cold. A new turn cancels it. It is skipped while an earlier handoff is still showing.
-- `context`: the context passes 250k tokens. It fires once, and arms again when the context falls below 200k.
+- `cache`: 55 minutes after a turn ends, 5 minutes before the prompt cache goes cold (cache lifetime minus lead time). A new turn cancels it. It is skipped while an earlier handoff is still showing.
+- `context`: the context passes 250k tokens. It fires once, and arms again when the context falls below 80% of the threshold (200k by default).
+
+## Options
+
+Set in `/config`. The defaults are the values above.
+
+- `cache_minutes` (60): how long the prompt cache stays warm after a turn.
+- `lead_minutes` (5): the cache handoff runs this long before the cache goes cold. The wait is `cache_minutes - lead_minutes`, at least 1 minute.
+- `context_tokens` (250000): the context handoff fires past this many tokens.
+
+A value that is not a positive number is ignored and the default is used.
 
 ## Commands
 

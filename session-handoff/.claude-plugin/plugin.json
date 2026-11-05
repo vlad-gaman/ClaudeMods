@@ -1,7 +1,30 @@
 {
   "name": "session-handoff",
   "version": "0.1.0",
-  "description": "Writes a handoff file for the current session automatically on /handoff-session, 5 minutes before the prompt cache goes cold, and when the context passes 250k tokens.",
+  "description": "Writes a handoff file for the current session automatically on /handoff-session, shortly before the prompt cache goes cold, and when the context grows past a token threshold.",
   "types": "./types/index.d.ts",
-  "lucide": "file-text"
+  "lucide": "file-text",
+  "userConfig": {
+    "cache_minutes": {
+      "type": "number",
+      "title": "Cache lifetime (minutes)",
+      "description": "How long the prompt cache stays warm after a turn.",
+      "default": 60,
+      "min": 1
+    },
+    "lead_minutes": {
+      "type": "number",
+      "title": "Lead time (minutes)",
+      "description": "The cache handoff runs this many minutes before the cache goes cold.",
+      "default": 5,
+      "min": 1
+    },
+    "context_tokens": {
+      "type": "number",
+      "title": "Context threshold (tokens)",
+      "description": "The context handoff fires once the context passes this many tokens.",
+      "default": 250000,
+      "min": 1
+    }
+  }
 }

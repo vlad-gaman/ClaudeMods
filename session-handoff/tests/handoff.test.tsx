@@ -188,6 +188,20 @@ test('the cache trigger runs 55 minutes after a turn and a new turn cancels it',
   expect(files.size).toBe(0)
 })
 
+test(
+  'the cache options set the lifetime and the lead time',
+  { options: { cache_minutes: 30, lead_minutes: 10 } },
+  async ($, on) => {
+    const { clock, files } = engine(on)
+    await $.session.start(START)
+    await $.turn.complete(TURN)
+    await clock.advance(20 * 60000 - 1000)
+    expect(files.size).toBe(0)
+    await clock.advance(1000)
+    expect(written(files, DOC)).toContain('- Trigger: cache')
+  },
+)
+
 test('the context trigger fires past 250k tokens and re-arms below 200k', async ($, on) => {
   let tokens = 260000
   const { clock, files } = engine(on, { tokens: () => tokens })
@@ -207,6 +221,30 @@ test('the context trigger fires past 250k tokens and re-arms below 200k', async 
   expect(await fired(199000)).toBe(false)
   expect(await fired(260000)).toBe(true)
 })
+
+test(
+  'the context option sets the threshold, and re-arming follows it',
+  { options: { context_tokens: 100000 } },
+  async ($, on) => {
+    let tokens = 120000
+    const { clock, files } = engine(on, { tokens: () => tokens })
+    await $.session.start(START)
+    const fired = async (next: number) => {
+      files.clear()
+      tokens = next
+      await $.turn.complete(TURN)
+      await clock.advance(0)
+      return written(files, DOC).includes('- Trigger: context')
+    }
+
+    expect(await fired(90000)).toBe(false)
+    expect(await fired(120000)).toBe(true)
+    expect(await fired(85000)).toBe(false)
+    expect(await fired(120000)).toBe(false)
+    expect(await fired(79000)).toBe(false)
+    expect(await fired(120000)).toBe(true)
+  },
+)
 
 // A finished handoff with its band mounted. `run` collects the commands the
 // buttons start, `toasts` the messages they show.

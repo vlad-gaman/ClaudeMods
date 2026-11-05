@@ -24,7 +24,8 @@ export const TITLES: Record<HandoffView['trigger'], string> = {
 export const READ_TOOLS = new Set(['Read'])
 export const WRITE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 
-// The prompt cache stays warm this many minutes after a turn.
+// Defaults of the options `cache_minutes`, `lead_minutes` and `context_tokens`
+// (plugin.json). The prompt cache stays warm this many minutes after a turn.
 export const CACHE_TTL_MIN = 60
 // The cache trigger runs the handoff this many minutes before the cache goes cold.
 export const RUN_BEFORE_COLD_MIN = 5

@@ -4,6 +4,7 @@ import type { EngineInterface as Engine, Register } from 'claude-code'
 import type { HandoffStep, HandoffView } from '../types'
 import {
   CACHE_TTL_MIN,
+  CONTEXT_THRESHOLD,
   RUN_BEFORE_COLD_MIN,
   STEPS,
   STEP_LABELS,
@@ -174,7 +175,15 @@ async function runHandoff(
   }
 }
 
-export const register: Register = on => {
+// An option the user left unset or set to something unusable falls back to
+// the default.
+const positive = (value: unknown, fallback: number) =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
+
+export const register: Register = (on, options) => {
+  const cacheMinutes = positive(options.cache_minutes, CACHE_TTL_MIN)
+  const contextTokens = positive(options.context_tokens, CONTEXT_THRESHOLD)
+  const leadMinutes = positive(options.lead_minutes, RUN_BEFORE_COLD_MIN)
   const run: Run = { id: 0, isRunning: false, cacheTimer: null, isContextArmed: true }
 
   on('session.start', async ($, e, next) => {
@@ -203,9 +212,9 @@ export const register: Register = on => {
     const result = await next(e)
     if (e.agentId !== undefined) return result
 
-    // Trigger 2: the cache goes cold `RUN_BEFORE_COLD_MIN` minutes from now.
+    // Trigger 2: the cache goes cold `lead_minutes` minutes from now.
     run.cacheTimer?.cancel()
-    const wait = Math.max(1, CACHE_TTL_MIN - RUN_BEFORE_COLD_MIN) * 60000
+    const wait = Math.max(1, cacheMinutes - leadMinutes) * 60000
     run.cacheTimer = $.clock.after(wait, () => {
       run.cacheTimer = null
       void (async () => {
@@ -218,7 +227,7 @@ export const register: Register = on => {
 
     // Trigger 3: the context passes the threshold (re-armed once it falls).
     const { context } = await $.session.usage()
-    const trigger = contextTrigger(run.isContextArmed, context.tokens ?? 0)
+    const trigger = contextTrigger(run.isContextArmed, context.tokens ?? 0, contextTokens)
     run.isContextArmed = trigger.isArmed
     if (trigger.isFired) void runHandoff($, run, 'context')
     return result
