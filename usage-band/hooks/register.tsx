@@ -118,7 +118,10 @@ export const register: Register = on => {
     const now = await $.clock.now()
     const parts = $.ui.resolve(e)
     const rest = await next(e)
-    const mine = band(parts, f, c, now, () => update($, isHidden, () => true))
+    const mine = band(parts, f, c, now, async () => {
+      await update($, isHidden, () => true)
+      await setStatusLine($)
+    })
 
     // Pass control on, so other mods' bands draw too.
     return <parts.Box flexDirection="column">{rest}{mine}</parts.Box>

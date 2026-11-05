@@ -48,3 +48,27 @@ test('limits go yellow at 75% and red past 90%; the chat at 25% and past 40%', (
   expect([74.9, 75, 90, 90.1].map(p => severity(p, 75, 90))).toEqual(['success', 'warning', 'warning', 'error'])
   expect([24, 25, 40, 41].map(p => severity(p, 25, 40))).toEqual(['success', 'warning', 'warning', 'error'])
 })
+
+test('Hide also clears the status line when a status-line surface is attached', async ($, on) => {
+  const statuses: unknown[] = []
+  on('session.measure', ($, e) => ({ changed: e.changed }))
+  mock.clock(on)
+  on('session.surfaces', () => ({ value: ['desktop', 'vscode'] }))
+  on('session.usage', () => ({
+    value: { context: MEASURE.context, rateLimits: [...MEASURE.rateLimits], cost: MEASURE.cost, startedAt: 1 },
+  }))
+  on('ui.status', (_$, e) => {
+    statuses.push((e as { text?: unknown }).text)
+    return { value: undefined }
+  })
+  on('ui.render', () => ({ type: 'Text', children: ['engine'] }))
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', () => ({ value: { command: 'usage-band' } }))
+  await $.session.start({ cwd: '.', surface: 'desktop', isInteractive: true })
+  await $.session.measure({ ...MEASURE, rateLimits: [...MEASURE.rateLimits], changed: [...MEASURE.changed] })
+  expect(typeof statuses.at(-1)).toBe("string")
+  const ui = await $.ui.mount({ plugin: 'usage-band', surface: 'desktop', ...BAND })
+  await ui.press({ key: 'hide' })
+  expect(statuses.at(-1)).toBeUndefined()
+  await ui.unmount()
+})

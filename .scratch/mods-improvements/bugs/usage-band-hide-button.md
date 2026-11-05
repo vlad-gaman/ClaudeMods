@@ -1,6 +1,6 @@
 # usage-band: the Hide button may leave the status line showing
 
-Status: needs-triage
+Status: resolved
 
 Found while doing [01-usage-band](../issues/01-usage-band.md). Not fixed there (behaviour-preserving only).
 
@@ -11,3 +11,8 @@ Not reproduced: it needs a session with both kinds of surface. If it is real, th
 ## Also noticed
 
 `ui.render` calls `loadCompactWindow`, which writes an atom, while the first render has no compact window yet. The engine forbids state writes during a render hook (`state.set: denied`), so on a first render before `session.start` has run, the band is skipped. In normal use `session.start` loads the window first, so it does not show. The tests work around it by running `session.start` before mounting.
+
+
+## Comments
+
+Reproduced in a test (desktop + vscode surfaces): the status line stayed set after Hide. Fixed: the Hide handler now calls `setStatusLine` after setting `isHidden` (`usage-band/hooks/register.tsx`, `view.tsx` type). New test in `usage-band/tests/band.test.ts` fails without the fix; 15 tests pass, `tsc` clean. The 'Also noticed' render-write item is not fixed.

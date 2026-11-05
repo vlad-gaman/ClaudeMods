@@ -10,7 +10,7 @@ export const band = (
   f: Figures,
   c: ChatTokens | null,
   now: number,
-  onHide: () => void,
+  onHide: () => void | Promise<void>,
 ) => {
   const { warm, detail } = cacheState(f, c, now)
 
