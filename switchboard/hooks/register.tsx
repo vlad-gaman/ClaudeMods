@@ -92,14 +92,14 @@ export const register: Register = on => {
   on('ui.open', async ($, e, next) => {
     const result = await next(e)
     const mod = await modOfPane($, e.id)
-    if (mod && (result as { isPlaced?: boolean }).isPlaced) await update($, closed, list => list.filter(x => x !== mod.id))
+    if (mod && result.value?.isPlaced) await update($, closed, list => list.filter(x => x !== mod.id))
 
     return result
   })
 
   on('ui.close', async ($, e, next) => {
     const result = await next(e)
-    const mod = (e.origin as unknown) === 'unload' ? undefined : await modOfPane($, e.id)
+    const mod = e.origin.kind === 'unload' ? undefined : await modOfPane($, e.id)
     if (mod) await update($, closed, list => (list.includes(mod.id) ? list : [...list, mod.id]))
 
     return result

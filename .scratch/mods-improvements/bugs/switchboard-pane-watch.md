@@ -1,6 +1,6 @@
 # switchboard: the pane watchers read the wrong fields, so they may never fire
 
-Status: needs-triage
+Status: resolved
 
 Found while doing [02-switchboard](../issues/02-switchboard.md). Not fixed there (behaviour-preserving only). Both are the type errors the type-check reported; they were silenced with type-only casts that keep today's behaviour.
 
@@ -12,3 +12,7 @@ If both are real, the fix is `result.value.isPlaced` and `e.origin.kind === 'unl
 ## Also noticed
 
 `refresh` calls `JSON.parse(ran.stdout)` outside a try block: if `claude plugin list --json` prints something that is not JSON, `refresh` throws and the panel keeps its old list with no message. Fix would be a try with a message on the `note` line.
+
+## Comments
+
+Both watcher fixes applied in switchboard/hooks/register.tsx: `result.value?.isPlaced` and `e.origin.kind === 'unload'`. Type-check clean, 14 tests pass. Still untested: the engine cannot drive `ui.open`/`ui.close` hooks from `$`. The `JSON.parse` item under "Also noticed" is not fixed.
