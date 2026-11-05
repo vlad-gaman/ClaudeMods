@@ -78,14 +78,17 @@ export const WRITE_USD_PER_MTOK = 10
 const recacheText = (f: Figures) =>
   f.contextTokens ? `re-cache ~${compact(f.contextTokens)} tokens · ~$${((f.contextTokens / 1e6) * WRITE_USD_PER_MTOK).toFixed(2)}` : undefined
 
-export type CacheState = { warm: boolean; detail: string }
+// `empty`: no call has written or read the cache yet (a new session), so it is neither warm nor cold.
+export type CacheState = { status: 'warm' | 'cold' | 'empty'; detail: string }
 
 export const cacheState = (f: Figures, c: ChatTokens | null, now: number): CacheState => {
   const left = cacheLeft(c, now)
   const hit = hitPercent(c)
 
+  if (!c?.cachedAt) return { status: 'empty', detail: '' }
+
   return {
-    warm: left !== undefined,
+    status: left !== undefined ? 'warm' : 'cold',
     detail: [
       left !== undefined ? `${left}m left` : recacheText(f),
       hit !== undefined ? `${hit}% hit` : undefined,
@@ -123,10 +126,10 @@ export const segments = (f: Figures, c: ChatTokens | null, now: number): Segment
 }
 
 export const line = (f: Figures, c: ChatTokens | null, now: number) => {
-  const { warm, detail } = cacheState(f, c, now)
+  const { status, detail } = cacheState(f, c, now)
 
   return [
     ...segments(f, c, now).map(s => `${s.label} ${s.value}${s.detail}`),
-    `Cache ${warm ? 'warm' : 'cold'} ${detail}`.trimEnd(),
+    `Cache ${status === 'empty' ? 'empty' : status} ${detail}`.trimEnd(),
   ].join('  ')
 }

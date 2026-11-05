@@ -85,11 +85,19 @@ test('line shows every figure when the cache is warm', () => {
 test('line shows what a cold cache would cost to write back', () => {
   const figures = { contextPercent: 10, contextTokens: 100000, contextWindow: 200000 }
 
-  expect(line(figures, null, NOW)).toBe(
-    'Context 10% 100k/200k  5h n/a  Week n/a  Cache cold re-cache ~100k tokens · ~$1.00',
+  const expired = { startedAt: 1, up: 0, down: 0, cacheRead: 0, cachedAt: NOW - 90 * 60000 }
+
+  expect(line(figures, expired, NOW)).toBe(
+    'Context 10% 100k/200k  Session ↑0 ↓0  5h n/a  Week n/a  Cache cold re-cache ~100k tokens · ~$1.00',
   )
 })
 
+test('line says the cache is empty, not cold, before any call has touched it', () => {
+  const fresh = { startedAt: 1, up: 0, down: 0, cacheRead: 0 }
+
+  expect(line({}, fresh, NOW)).toContain('Cache empty')
+})
+
 test('line says n/a for figures not measured yet', () => {
-  expect(line({}, null, NOW)).toBe('Context n/a  5h n/a  Week n/a  Cache cold')
+  expect(line({}, null, NOW)).toBe('Context n/a  5h n/a  Week n/a  Cache empty')
 })

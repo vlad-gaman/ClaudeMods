@@ -12,7 +12,7 @@ export const band = (
   now: number,
   onHide: () => void | Promise<void>,
 ) => {
-  const { warm, detail } = cacheState(f, c, now)
+  const { status, detail } = cacheState(f, c, now)
 
   return (
     <Box flexDirection="column">
@@ -28,10 +28,10 @@ export const band = (
       <Box flexDirection="row" justifyContent="space-between">
         <Text key="cache">
           <Text dimColor>Cache </Text>
-          <Text key="cache-state" color={warm ? 'success' : 'warning'}>
-            {warm ? '● warm' : '○ cold'}
+          <Text key="cache-state" color={status === 'warm' ? 'success' : status === 'cold' ? 'warning' : undefined} dimColor={status === 'empty'}>
+            {status === 'warm' ? '● warm' : status === 'cold' ? '○ cold' : '○ empty'}
           </Text>
-          <Text color={warm ? undefined : 'warning'} dimColor={warm}>{detail ? ` ${detail}` : ''}</Text>
+          <Text color={status === 'cold' ? 'warning' : undefined} dimColor={status !== 'cold'}>{detail ? ` ${detail}` : ''}</Text>
         </Text>
         <Button key="hide" label="Hide" plain onPress={onHide} />
       </Box>

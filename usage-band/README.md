@@ -8,7 +8,7 @@ A band above the prompt showing usage for this chat, the 5h window and the week.
 - **Session** (the chat's tokens): tokens sent (↑, input including cache) and received (↓) by this chat. Starts over on `/clear`.
 - **Cost**: the chat's cost in USD.
 - **5h** and **Week**: the rate-limit windows' percent used and time until reset. Yellow from 75%, red above 90%. They appear on a Claude subscription only (they come from the API's rate-limit headers).
-- **Cache**: whether the prompt cache is warm, the minutes left and the share of input served from it. When cold, the estimated cost to write the context back.
+- **Cache**: whether the prompt cache is warm, cold or empty (empty: no call has touched it yet, as in a new session), the minutes left and the share of input served from it. When cold, the estimated cost to write the context back.
 
 The **Hide** button hides the band.
 
