@@ -34,14 +34,19 @@ type Options = {
   fork?: () => unknown
   tokens?: () => number
   env?: Record<string, string>
+  kept?: Record<string, unknown>
 }
 
 // Stubs the world a handoff reads from and writes to. Unless a test gives a
 // `fork`, the model summary is unavailable and the fallback narrative is written.
-const engine = (on: any, { messages = MESSAGES, fork, tokens, env = { HOME: '/home/me' } }: Options = {}) => {
+const engine = (on: any, { messages = MESSAGES, fork, tokens, env = { HOME: '/home/me' }, kept = {} }: Options = {}) => {
   const clock = mock.clock(on, { now: NOW })
   mock.env(on, env)
-  mock.store(on)
+  on('store.get', (_: unknown, e: any) => ({ value: kept[e.key] }))
+  on('store.set', (_: unknown, e: any) => {
+    kept[e.key] = e.value
+    return { value: undefined }
+  })
   const files = new Map<string, string>()
   on('command.register', () => ({ value: { command: 'handoff-session' } }))
   on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
@@ -59,7 +64,7 @@ const engine = (on: any, { messages = MESSAGES, fork, tokens, env = { HOME: '/ho
   on('fs.read', (_: unknown, e: any) => ({ value: files.get(e.path) }))
   on('ui.render', () => ({ type: 'Text', children: ['engine'] }))
   on('ui.invalidate', () => ({ value: undefined }))
-  return { clock, files }
+  return { clock, files, kept }
 }
 
 // The engine resolves paths against the OS, so match on the end of the path.
@@ -328,3 +333,41 @@ test('on Windows Close deletes with backslash paths', async ($, on) => {
   expect(run[0]!.slice(5).every(f => !f.includes('/'))).toBe(true)
   await ui.unmount()
 })
+
+test('a finished handoff is kept in the store, so its panel can come back after a restart', async ($, on) => {
+  const { clock, kept } = engine(on)
+  await $.session.start(START)
+  await $.command.run(RUN)
+  await clock.advance(0)
+
+  expect(kept.view).toMatchObject({ phase: 'ready', isDismissed: false })
+})
+
+const saved = (extra: object) => ({
+  id: 1, trigger: 'command', title: 'Handoff', steps: [], phase: 'ready',
+  path: '/h/a.md', promptPath: '/h/a.prompt.md', prompt: 'continue', cwd: '/p', isDismissed: false, ...extra,
+})
+
+test('the panel of the last finished handoff returns on session start', async ($, on) => {
+  const run: string[][] = []
+  engine(on, { kept: { view: saved({}) } })
+  ;(on as any)('process.run', (_: unknown, e: any) => {
+    run.push([...e.argv])
+    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+  })
+  await $.session.start(START)
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' } as never)
+  await ui.press({ key: 'open' })
+  expect(run[0]![1]).toBe('/h/a.md')
+})
+
+for (const [name, extra] of [['was still working when the app closed', { phase: 'working' }], ['was dismissed', { isDismissed: true }]] as const) {
+  test(`a handoff that ${name} does not return`, async ($, on) => {
+    engine(on, { kept: { view: saved(extra) } })
+    await $.session.start(START)
+
+    const ui = await $.ui.mount({ ...BAND, surface: 'desktop' } as never)
+    await expect(ui.press({ key: 'open' })).rejects.toThrow()
+  })
+}

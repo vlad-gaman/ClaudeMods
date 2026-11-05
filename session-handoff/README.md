@@ -1,6 +1,6 @@
 # session-handoff
 
-Writes a handoff file for the current session automatically on /handoff-session, shortly before the prompt cache goes cold, and when the context grows past a token threshold. The handoff summarises the session and holds a prompt to continue it in a new chat. Handoffs are saved in `~/.claude/handoffs/`.
+Writes a handoff file for the current session automatically on /handoff-session, shortly before the prompt cache goes cold, and when the context grows past a token threshold. The handoff summarises the session and holds a prompt to continue it in a new chat. Handoffs are saved in `~/.claude/handoffs/`. The panel of the last finished handoff comes back when the app restarts, until you press Close.
 
 ## What you see
 

@@ -36,6 +36,20 @@ type Run = {
   isContextArmed: boolean
 }
 
+// The panel outlives a restart: a finished or dismissed handoff is kept in the
+// plugin's store, and put back on `session.start`.
+const persist = async ($: Engine) => {
+  await $.store.set('view', await read($, view))
+}
+
+const restore = async ($: Engine) => {
+  if (await read($, view)) return
+  const saved = (await $.store.get('view')) as HandoffView | null | undefined
+  // A handoff still working when the app closed will never finish.
+  if (!saved || saved.phase === 'working' || saved.isDismissed) return
+  await update($, view, () => saved)
+}
+
 const patch = (
   $: Engine,
   id: number,
@@ -172,6 +186,7 @@ async function runHandoff(
     }))
   } finally {
     run.isRunning = false
+    await persist($)
   }
 }
 
@@ -191,6 +206,7 @@ export const register: Register = (on, options) => {
       name: 'handoff-session',
       description: 'Write a handoff file so a new chat can continue this session',
     })
+    await restore($)
     return next(e)
   })
 
@@ -242,6 +258,7 @@ export const register: Register = (on, options) => {
     const rest = await next(e)
     const dismiss = async () => {
       await update($, view, v => (v ? { ...v, isDismissed: true } : v))
+      await persist($)
     }
     const mine = band($, parts, current, e.surface, dismiss)
 
