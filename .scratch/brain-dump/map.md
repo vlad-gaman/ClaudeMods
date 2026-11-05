@@ -17,13 +17,13 @@ A decided spec at `.scratch/brain-dump/spec.md` for a new **brain-dump** mod in 
 
 - [01 Engine capabilities](issues/01-engine-capabilities.md): hooks can intercept, replace or drop a submitted prompt, read and fill the draft, ask via `$.ui.ask`, call a model; only `$.store` persists. Several behaviours unverified.
 - [02 Prior-art teardown](issues/02-prior-art-teardown.md): copy the "go" gate, length trigger with escapes, skip-if-inferable questions; avoid memory-only state; no existing tool does explicit conflict checking.
+- [03 Interrogation behaviour](issues/03-interrogation-behaviour.md): internal conflict/ambiguity/gap split; always ask conflicts and costly items, assume the rest visibly; one question at a time, cap 8, "enough" to stop; extract-then-compare detection (to validate); answers update a points list; "cancel" restores the dump, resume via `$.store` optional.
 
 ## Not yet specified
 
 - Where the interrogation happens (in chat, in a pane, or in a band) and how answers come back: depends on what the engine allows.
 - Whether the mod rewrites via a hook-injected instruction (like both existing mods) or calls `$.model` itself: depends on engine capabilities.
 - Test plan, README and glossary wording, mod name/slash command names.
-- What happens to a dump when the user abandons the interrogation midway.
 
 ## Out of scope
 
