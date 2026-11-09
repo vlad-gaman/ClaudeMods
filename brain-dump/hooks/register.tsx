@@ -40,7 +40,7 @@ type Run = {
   isFlowActive: boolean
   isIgnored: boolean
   isExpanded: boolean
-  isOffering: boolean
+  isLong: boolean
   /** The last non-empty draft the banner saw: a slash command cannot read the box. */
   lastDraft: string
   minWords: number
@@ -241,7 +241,7 @@ export const register: Register = (on, options) => {
     isFlowActive: false,
     isIgnored: false,
     isExpanded: false,
-    isOffering: false,
+    isLong: false,
     lastDraft: '',
     minWords: number(options.minWords, DEFAULT_MIN_WORDS),
     maxQuestions: number(options.maxQuestions, DEFAULT_MAX_QUESTIONS),
@@ -287,19 +287,16 @@ export const register: Register = (on, options) => {
     return { text: 'Structuring your dump.' }
   })
 
-  // Typing refreshes the offer only when it would change, so a long draft is
-  // not redrawn on every key. The count is a split, well inside the 50 ms.
+  // Typing redraws the offer only when the draft crosses the length where it
+  // could appear: a length test, no work. The render counts the words.
   on('prompt.edit', ($, e, next) => {
     if (run.isInteractive) {
-      const after = e.text.slice(0, e.start) + e.inputText + e.text.slice(e.end)
-      const isOffering = shouldOffer({
-        words: countWords(after),
-        minWords: run.minWords,
-        isEnabled: run.isEnabled,
-        isFlowActive: run.isFlowActive,
-        isIgnored: run.isIgnored,
-      })
-      if (isOffering !== run.isOffering) $.ui.invalidate('ui.render')
+      const length = e.text.length - (e.end - e.start) + e.inputText.length
+      const isLong = length >= run.minWords * 2 - 1 // fewest characters for minWords words
+      if (isLong !== run.isLong) {
+        run.isLong = isLong
+        $.ui.invalidate('ui.render')
+      }
     }
     return next(e)
   })
@@ -322,14 +319,14 @@ export const register: Register = (on, options) => {
       if (box.text.trim() === '') run.isIgnored = false
       else run.lastDraft = box.text
       const words = countWords(box.text)
-      run.isOffering = shouldOffer({
+      const isOffering = shouldOffer({
         words,
         minWords: run.minWords,
         isEnabled: run.isEnabled,
         isFlowActive: run.isFlowActive,
         isIgnored: run.isIgnored,
       })
-      if (run.isOffering) {
+      if (isOffering) {
         mine = offerBand(
           parts,
           words,
@@ -381,6 +378,7 @@ export const register: Register = (on, options) => {
       later($, async () => {
         const r = await $.prompt.fill({ text: pending.prompt })
         if (r.isFilled) {
+          run.isIgnored = true // the edited prompt is not a new dump to structure
           await savePending($, { ...pending, stage: 'editing' })
           await update($, ready, () => null)
           $.ui.invalidate('ui.render')

@@ -62,6 +62,9 @@ const engine = (on: any, { findings = [FINDING], answer, complete, kept = {}, dr
   on('ui.invalidate', () => ({ value: undefined }))
   on('ui.render', () => ({ type: 'Text', children: ['engine'] }))
   on('model.complete', (_: unknown, e: any) => {
+    if (complete?.(e.system) === null) {
+      return { value: { isAnswered: false, text: '', reason: 'api-error', usage: {} } }
+    }
     const reply =
       complete?.(e.system) ??
       (e.system.startsWith('You split')
@@ -236,4 +239,33 @@ test('a non-interactive run does not touch prompts', async ($, on) => {
 
   await submit($, 'structure: a long dump')
   expect(sent).toEqual(['structure: a long dump'])
+})
+
+test('a model that does not answer puts the dump back', async ($, on) => {
+  const { clock, fills, kept } = engine(on, { complete: () => null as never })
+  await $.session.start(START)
+
+  await submit($, 'structure: a long dump')
+  await clock.advance(0)
+  await clock.advance(0)
+
+  expect(fills).toEqual(['', 'a long dump'])
+  expect(kept['pending:s1']).toBeUndefined()
+})
+
+test('a pending dump is only replaced when the owner says so', async ($, on) => {
+  const kept: Record<string, unknown> = {
+    'pending:s1': { dump: 'old', points: [], findings: [], answers: [], prompt: 'OLD', stage: 'ready', at: NOW },
+  }
+  const { clock, asked, fills } = engine(on, { kept, answer: () => 'Keep it' })
+  await $.session.start(START)
+
+  await submit($, 'structure: a new dump')
+  await clock.advance(0)
+  await clock.advance(0)
+
+  expect(asked[0].questions[0].question).toBe('Replace the earlier dump?')
+  expect(asked).toHaveLength(1)
+  expect(fills).toEqual(['a new dump'])
+  expect((kept['pending:s1'] as any).prompt).toBe('OLD')
 })
