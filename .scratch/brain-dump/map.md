@@ -19,6 +19,8 @@ A decided spec at `.scratch/brain-dump/spec.md` for a new **brain-dump** mod in 
 - [02 Prior-art teardown](issues/02-prior-art-teardown.md): copy the "go" gate, length trigger with escapes, skip-if-inferable questions; avoid memory-only state; no existing tool does explicit conflict checking.
 - [03 Interrogation behaviour](issues/03-interrogation-behaviour.md): internal conflict/ambiguity/gap split; always ask conflicts and costly items, assume the rest visibly; one question at a time, cap 8, "enough" to stop; extract-then-compare detection (to validate); answers update a points list; "cancel" restores the dump, resume via `$.store` optional.
 
+- [04 Structured prompt format](issues/04-output-format.md): fixed core sections (Goal, Context, Task, Constraints, Done when), empties dropped; separate Assumptions and Decisions sections; original dump kept in `$.store` only.
+
 ## Not yet specified
 
 - Where the interrogation happens (in chat, in a pane, or in a band) and how answers come back: depends on what the engine allows.
