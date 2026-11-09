@@ -100,22 +100,30 @@ async function runFlow($: Engine, run: Run, dump: string) {
     $.ui.toast('Nothing to structure.')
     return
   }
+  // Whatever stops the flow, the dump goes back in the box: it is never lost.
+  const bail = async (message: string) => {
+    $.ui.toast(message)
+    await $.prompt.fill({ text })
+  }
   if (text.length > MAX_DUMP_CHARS) {
-    $.ui.toast('That dump is too long to structure; it is sent as written.')
+    await bail('That dump is too long to structure; it is back in the prompt box.')
     return
   }
   if (run.isFlowActive) {
-    $.ui.toast('A brain dump is already in progress.')
+    await bail('A brain dump is already in progress; your text is back in the prompt box.')
     return
   }
   run.isFlowActive = true
   try {
     const earlier = await loadPending($)
-    if (earlier && !isExpired(earlier, await $.clock.now()) && earlier.stage !== 'editing') {
+    if (earlier && !isExpired(earlier, await $.clock.now())) {
       const choice = await $.ui
         .ask('Replace the earlier dump?', ['Replace it (recommended)', 'Keep it'])
         .catch(() => 'Keep it')
-      if (!choice.startsWith('Replace')) return
+      if (!choice.startsWith('Replace')) {
+        await $.prompt.fill({ text })
+        return
+      }
     }
     await runStages($, run, text)
   } finally {
@@ -258,6 +266,7 @@ export const register: Register = (on, options) => {
       run.isEnabled = args.kind === 'on'
       await $.store.set('enabled', run.isEnabled)
       $.ui.invalidate('ui.render')
+      $.ui.toast(state())
       return { text: state() }
     }
     if (args.kind === 'resume') {

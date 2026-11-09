@@ -53,21 +53,12 @@ export type Pending = {
   at: number
 }
 
-/** The banner's state for one draft. */
-export type BannerView = {
-  words: number
-  /** The draft the banner last saw, for a bare /brain-dump. */
-  draft: string
-  isIgnored: boolean
-}
-
 /** What the "ready" band shows. */
 export type ReadyView = { preview: string[]; count: number }
 
 declare module 'claude-code' {
   interface PluginState {
     'brain-dump': {
-      banner: BannerView
       ready: ReadyView | null
       busy: string | null
     }

@@ -14,7 +14,7 @@ The words the code uses. Use these terms in names, comments, issues and replies.
 ## Interface
 
 - **Pane**: a docked panel a mod opens with `$.ui.open({ id })`. Session Panel and Switchboard each draw one.
-- **Band**: a block drawn above the prompt (`AbovePrompt`). Usage Band and Session Handoff draw bands. Each passes control on so other mods' bands also draw.
+- **Band**: a block drawn above the prompt (`AbovePrompt`). Usage Band, Session Handoff and Brain Dump draw bands. Each passes control on so other mods' bands also draw.
 - **Status line**: where Usage Band puts its figures on surfaces with no band (VS Code, mobile).
 - **Surface**: where the session is shown: `desktop`, `vscode`, `mobile`.
 - **Toast**: a short message from `$.ui.toast`.
