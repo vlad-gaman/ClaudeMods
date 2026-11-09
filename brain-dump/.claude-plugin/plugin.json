@@ -1,0 +1,23 @@
+{
+  "name": "brain-dump",
+  "version": "0.1.0",
+  "description": "Turns a long, unstructured prompt into one structured prompt: it asks about points that conflict or are unclear, then runs the result only after you type go.",
+  "types": "./types/index.d.ts",
+  "lucide": "brain",
+  "userConfig": {
+    "minWords": {
+      "type": "number",
+      "title": "Draft length (words)",
+      "description": "A draft with this many words or more raises the Structure banner.",
+      "default": 200,
+      "min": 1
+    },
+    "maxQuestions": {
+      "type": "number",
+      "title": "Most questions",
+      "description": "The most questions asked about one dump.",
+      "default": 8,
+      "min": 1
+    }
+  }
+}
