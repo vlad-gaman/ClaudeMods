@@ -21,6 +21,8 @@ A decided spec at `.scratch/brain-dump/spec.md` for a new **brain-dump** mod in 
 
 - [04 Structured prompt format](issues/04-output-format.md): fixed core sections (Goal, Context, Task, Constraints, Done when), empties dropped; separate Assumptions and Decisions sections; original dump kept in `$.store` only.
 
+- [05 Triggers and controls](issues/05-triggers-and-controls.md): banner at `minWords` (default 200) offering Structure / Ignore; `/brain-dump`, `structure:` prefix and `/brain-dump on|off` (persisted in `$.store`); "go" / "cancel" typed in the prompt box.
+
 ## Not yet specified
 
 - Where the interrogation happens (in chat, in a pane, or in a band) and how answers come back: depends on what the engine allows.
