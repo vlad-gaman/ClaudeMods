@@ -127,6 +127,6 @@ Pure logic in a module with no engine calls, so it tests without the engine (see
 
 ## Open for the owner
 
-- `edit` as a third typed word beside `go` and `cancel` (added by this spec).
-- Default for auto-detect (assumed on).
+- ~~`edit` as a third typed word~~ Confirmed by the owner (2026-11-09).
+- ~~Default for auto-detect (assumed on)~~ Confirmed on by the owner (2026-11-09).
 - Whether `/brain-dump resume` is worth building in the first version.
