@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { CONN_ICON, FILE_ICON } from '../hooks/data'
-import { connIcon, connTitle, fileKind, findCommand, isSkillCommand, isTypedByPerson, mcpOf, pathsIn, shorten, titleIn } from '../hooks/names'
+import { connIcon, connTitle, fileKind, findCommand, isSkillCommand, isTypedByPerson, mcpOf, nameFromTools, pathsIn, shorten, titleIn } from '../hooks/names'
 
 test('connTitle: a known id gets its name, another id a short stand-in, a key its words capitalised', () => {
   expect(connTitle('c97b9d07-a0a9-440c-ace0-81c9338b3740')).toBe('Gmail')
@@ -9,6 +9,9 @@ test('connTitle: a known id gets its name, another id a short stand-in, a key it
   expect(connTitle('claude_ai_Google_Drive')).toBe('Google Drive')
   expect(connTitle('claude.ai Slack')).toBe('Slack')
   expect(connTitle('atlassian')).toBe('Atlassian')
+  expect(connTitle('mcp-registry')).toBe('MCP Registry')
+  expect(connTitle('plugin_github_github')).toBe('Github')
+  expect(connTitle('GoogleDrive')).toBe('Google Drive')
 })
 
 test('connIcon: a word in the server name picks the icon, the plug otherwise', () => {
@@ -78,4 +81,17 @@ test('isTypedByPerson: not its own command, not one a plugin ran', () => {
   expect(isTypedByPerson('tdd')).toBe(true)
   expect(isTypedByPerson('session-panel', { kind: 'person' })).toBe(false)
   expect(isTypedByPerson('tdd', { kind: 'plugin' })).toBe(false)
+})
+
+test('nameFromTools: the listed name for a connector, nothing when it only repeats the key or an id', () => {
+  const id = '0123abcd-4567-89ab-cdef-000000000000'
+  const tools = [
+    { name: `mcp__${id}__send`, serverName: 'claude.ai Fathom' },
+    { name: 'mcp__atlassian__x', serverName: 'atlassian' },
+    { name: 'mcp__other__x', serverName: id },
+  ]
+  expect(nameFromTools(tools, id)).toBe('Fathom')
+  expect(nameFromTools(tools, 'atlassian')).toBeUndefined()
+  expect(nameFromTools(tools, 'other')).toBeUndefined()
+  expect(nameFromTools(tools, 'missing')).toBeUndefined()
 })

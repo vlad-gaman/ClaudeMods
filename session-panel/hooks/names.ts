@@ -8,12 +8,29 @@ export const connIcon = (server: string) => {
   return CONN_ICON[CONN_WORDS.find(([w]) => key.includes(w))?.[1] ?? 'plug']
 }
 
-// The name a person would call a connector by: the key without its prefix, words capitalised.
+const ACRONYMS = new Set(['mcp', 'api', 'pr', 'ai', 'ssh', 'sql', 'url', 'ui'])
+
+// The name a person would call a connector by: the key without its prefixes (`claude.ai`, a plugin's
+// `plugin_<name>_`), words capitalised, acronyms in capitals.
 export const connTitle = (server: string) =>
   KNOWN_CONNECTORS[server] ??
   (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(server)
     ? 'Connector ' + server.slice(0, 8)
-    : server.replace(/^claude[ _.]?ai[ _.]/i, '').replace(/[_-]+/g, ' ').replace(/\b[a-z]/g, c => c.toUpperCase()))
+    : server
+        .replace(/^claude[ _.]?ai[ _.]/i, '')
+        .replace(/^plugin_[^_]+_/i, '')
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
+        .split(/[\s_-]+/)
+        .filter(Boolean)
+        .map(w => (ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+        .join(' '))
+
+// The display name the engine lists a connector under (`serverName` of its MCP tools), tidied like a key;
+// undefined when no tool of it is listed or the engine only repeats the key or an id.
+export const nameFromTools = (tools: { name: string; serverName: string }[], server: string) => {
+  const listed = tools.find(t => t.name.startsWith(`mcp__${server}__`))?.serverName
+  return listed && listed !== server && !/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(listed) ? connTitle(listed) : undefined
+}
 
 export const fileKind = (path: string): keyof typeof FILE_ICON => KIND_OF[(path.split('.').pop() ?? '').toLowerCase()] ?? 'plain'
 

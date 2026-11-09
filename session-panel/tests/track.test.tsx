@@ -14,7 +14,7 @@ const PANE = {
   },
 } as const
 
-const engine = (on: any, toolAnswer: object = { result: {} }) => {
+const engine = (on: any, toolAnswer: object = { result: {} }, usage: object = { context: {} }) => {
   on('command.register', () => ({ value: { command: 'session-panel' } }))
   on('command.list', () => ({
     value: [
@@ -25,7 +25,7 @@ const engine = (on: any, toolAnswer: object = { result: {} }) => {
   }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('session.start', (_: unknown, e: any) => ({ cwd: e.cwd }))
-  on('session.usage', () => ({ value: { context: {} } }))
+  on('session.usage', () => ({ value: usage }))
   on('http.fetch', () => ({ value: { ok: false, status: 404, text: '' } }))
   on('tool.call', () => toolAnswer)
   on('command.run', () => ({ text: '' }))
@@ -38,6 +38,20 @@ test('a connector called through its MCP tool is listed', async ($, on) => {
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Text', text: /^Atlassian$/ }))?.text).toBe('Atlassian')
+  await ui.unmount()
+})
+
+test('a connector keyed by an id is titled with the name the engine lists it under', async ($, on) => {
+  const id = '0123abcd-4567-89ab-cdef-000000000000'
+  engine(on, undefined, {
+    context: { breakdown: { memoryFiles: [], mcpTools: [{ name: `mcp__${id}__send`, serverName: 'claude.ai Fathom' }] } },
+  })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: `mcp__${id}__send` } as any)
+  await new Promise(r => setTimeout(r, 50)) // the name is read in the background
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /^Fathom$/ }))?.text).toBe('Fathom')
   await ui.unmount()
 })
 

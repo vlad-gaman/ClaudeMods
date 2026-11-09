@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { IconRow, Used, FileRow, SkillRow, Todo } from '../types'
-import { findCommand, isSkillCommand, isTypedByPerson, mcpOf, pathsIn, shorten, titleIn, connTitle } from './names'
+import { findCommand, isSkillCommand, isTypedByPerson, mcpOf, pathsIn, shorten, titleIn, connTitle, nameFromTools } from './names'
 import { applyTodoTool, TODO_TOOLS, type TodoInput, type TodoResult } from './todos'
 import { pane } from './view'
 
@@ -18,7 +18,14 @@ const todos = atom({ plugin: 'session-panel', key: 'todos' } as const, [] as Tod
 // Brand icon for a connector, fetched once from Simple Icons by its display name (Gmail -> "gmail").
 // Only the path data is kept and redrawn in black or white; no match leaves the Lucide icon.
 async function loadIcon($: EngineInterface, server: string) {
-  const slug = connTitle(server).toLowerCase().replace(/[^a-z0-9]/g, '')
+  let name: string | undefined
+  try {
+    const { context } = await $.session.usage({ breakdown: 'summary' })
+    name = nameFromTools((context.breakdown?.mcpTools ?? []) as { name: string; serverName: string }[], server)
+  } catch {
+    // usage unavailable: the title comes from the key
+  }
+  const slug = (name ?? connTitle(server)).toLowerCase().replace(/[^a-z0-9]/g, '')
   let paths: string[] = []
   try {
     if (slug) {
@@ -28,7 +35,7 @@ async function loadIcon($: EngineInterface, server: string) {
   } catch {
     // offline or refused: keep the Lucide icon
   }
-  await update($, icons, l => l.map(i => (i.server === server ? { ...i, paths } : i)))
+  await update($, icons, l => l.map(i => (i.server === server ? { ...i, paths, name } : i)))
 }
 
 async function loadTitle($: EngineInterface) {
