@@ -1,7 +1,10 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { BranchPr, OpenPr, PrState, RepoPrs, ReviewState, Run, RunState } from '../types'
+import { azureProvider } from './azure'
+import { githubProvider } from './github'
+import { LIMIT, type Port, type Provider, type Snapshot } from './provider'
+import { type Remote, remoteOf } from './remote'
 
 const repo = atom({ plugin: 'open-prs', key: 'repo' } as const, null)
 const branchPr = atom({ plugin: 'open-prs', key: 'branchPr' } as const, null)
@@ -18,297 +21,6 @@ const RETRY_MS = 30_000
 const STALE_MS = 60_000
 const PANE = 'open-prs'
 const TITLE = 'Open PRs'
-const LIMIT = 50
-const AZ_RUNS = 200
-const AZ_THREAD_CALLS = 6
-const COUNT_MS = 10 * 60_000
-const COUNTS_PER_PASS = 12
-
-type GhCheck = {
-  __typename: 'CheckRun' | 'StatusContext'
-  name?: string
-  status?: string
-  conclusion?: string | null
-  detailsUrl?: string | null
-  workflowName?: string
-  checkSuite?: { workflowRun: { workflow: { name: string } } | null } | null
-  context?: string
-  state?: string
-  targetUrl?: string | null
-}
-type GhOpenPr = {
-  number: number
-  title: string
-  author: { login: string } | null
-  isDraft: boolean
-  url: string
-  reviewDecision: string | null
-  latestReviews: { state: string }[] | null
-  statusCheckRollup: GhCheck[] | null
-}
-type GhCommentCounts = { data: { repository: { pullRequests: { nodes: { number: number; totalCommentsCount: number | null }[] } } | null } }
-type GhBranchPr = { number: number; title: string; state: 'OPEN' | 'MERGED' | 'CLOSED'; isDraft: boolean }
-type GhRefChecks = {
-  data: { repository: { ref: { target: { statusCheckRollup?: { contexts: { nodes: GhCheck[] } } | null } } | null } | null }
-}
-type AzPr = {
-  number: number
-  title: string
-  author: string | null
-  isDraft: boolean | null
-  status: string
-  votes: { vote: number; isRequired: boolean | null; isGroup: boolean | null }[] | null
-}
-type AzThreads = { isDeleted: boolean | null; comments: { type: string | null; isDeleted: boolean | null }[] | null }[] | null
-type AzRun = { id: number; branch: string; status: string; result: string | null; name: string; definition: number; repo: string | null }
-/** `isMissing`: the call ran and failed; `isUnknown`: it threw or never ran, so whether the thing exists is not known. */
-type CliResult<T> = { data: T } | { isMissing: boolean } | { isUnknown: true }
-type Remote = { host: 'github'; slug: string } | { host: 'azure'; org: string; project: string; name: string }
-type Snapshot = { repo?: RepoPrs | null; branchPr?: BranchPr | null; branchRun?: Run | null }
-
-const GITHUB = /(?:^|[@/])github\.com(?::\d+)?[:/]([^/:]+\/[^/]+?)(?:\.git)?\/?$/i
-const AZURE = [
-  /dev\.azure\.com\/([^/]+)\/([^/]+)\/_git\/([^/]+?)\/?$/i,
-  /\/\/(?:[^@/]+@)?([^./@]+)\.visualstudio\.com\/(?:DefaultCollection\/)?([^/]+)\/_git\/([^/]+?)\/?$/i,
-  /(?:ssh\.dev\.azure\.com|vs-ssh\.visualstudio\.com)[:/]v3\/([^/]+)\/([^/]+)\/([^/]+?)\/?$/i,
-]
-const ADO_BUILD = /\/_build\/results\?buildId=\d+$/
-const SEVERITY: RunState[] = ['failed', 'cancelled', 'partial', 'running', 'queued', 'succeeded']
-const IGNORED_CONCLUSIONS = ['NEUTRAL', 'SKIPPED', 'STALE']
-const AZ_PR_FIELDS =
-  '[].{number:pullRequestId,title:title,author:createdBy.displayName,isDraft:isDraft,status:status,votes:reviewers[].{vote:vote,isRequired:isRequired,isGroup:isContainer}}'
-const AZ_THREADS = 'value[].{isDeleted:isDeleted,comments:comments[].{type:commentType,isDeleted:isDeleted}}'
-const COMMENT_COUNTS = `query($owner: String!, $name: String!) {
-  repository(owner: $owner, name: $name) {
-    pullRequests(states: OPEN, first: 100, orderBy: { field: CREATED_AT, direction: DESC }) { nodes { number totalCommentsCount } }
-  }
-}`
-const AZ_RUN_FIELDS = '[].{id:id,branch:sourceBranch,status:status,result:result,name:definition.name,definition:definition.id,repo:repository.id}'
-const REF_CHECKS = `query($owner: String!, $name: String!, $ref: String!) {
-  repository(owner: $owner, name: $name) { ref(qualifiedName: $ref) { target { ... on Commit {
-    statusCheckRollup { contexts(first: 100) { nodes {
-      __typename
-      ... on CheckRun { name status conclusion detailsUrl checkSuite { workflowRun { workflow { name } } } }
-      ... on StatusContext { context state targetUrl }
-    } } }
-  } } } }
-}`
-
-const decode = (part: string) => {
-  try {
-    return decodeURIComponent(part)
-  } catch {
-    return part
-  }
-}
-
-function remoteOf(url: string | null): Remote | null {
-  if (!url) return null
-  const slug = url.match(GITHUB)?.[1]
-  if (slug) return { host: 'github', slug }
-  for (const pattern of AZURE) {
-    const match = url.match(pattern)
-    if (match?.[1] && match[2] && match[3]) return { host: 'azure', org: decode(match[1]), project: decode(match[2]), name: decode(match[3]) }
-  }
-  return null
-}
-
-const ghState = (pr: GhBranchPr): PrState =>
-  pr.state === 'OPEN' ? (pr.isDraft ? 'draft' : 'open') : pr.state === 'MERGED' ? 'merged' : 'closed'
-
-const azState = (pr: AzPr): PrState =>
-  pr.status === 'active' ? (pr.isDraft ? 'draft' : 'open') : pr.status === 'completed' ? 'merged' : 'closed'
-
-function checkState(check: GhCheck): RunState | null {
-  if (check.__typename === 'StatusContext')
-    return check.state === 'SUCCESS' ? 'succeeded' : check.state === 'PENDING' ? 'running' : check.state === 'EXPECTED' ? 'queued' : 'failed'
-  if (check.status !== 'COMPLETED') return check.status === 'IN_PROGRESS' ? 'running' : 'queued'
-  const conclusion = check.conclusion ?? ''
-  if (IGNORED_CONCLUSIONS.includes(conclusion)) return null
-  return conclusion === 'SUCCESS' ? 'succeeded' : conclusion === 'CANCELLED' ? 'cancelled' : 'failed'
-}
-
-function azRunState(run: AzRun): RunState {
-  if (run.status === 'completed')
-    return run.result === 'succeeded' ? 'succeeded' : run.result === 'partiallySucceeded' ? 'partial' : run.result === 'canceled' ? 'cancelled' : 'failed'
-  return run.status === 'inProgress' ? 'running' : run.status === 'cancelling' ? 'cancelled' : 'queued'
-}
-
-function ghReview(pr: GhOpenPr): ReviewState {
-  if (pr.reviewDecision === 'APPROVED') return 'approved'
-  if (pr.reviewDecision === 'CHANGES_REQUESTED') return 'changes'
-  if (pr.reviewDecision === 'REVIEW_REQUIRED') return 'required'
-  const states = (pr.latestReviews ?? []).map(review => review.state)
-  return states.includes('CHANGES_REQUESTED') ? 'changes' : states.includes('APPROVED') ? 'approved' : 'required'
-}
-
-function azReview(pr: AzPr): ReviewState {
-  const votes = pr.votes ?? []
-  if (votes.some(({ vote }) => vote < 0)) return 'changes'
-  return votes.some(({ vote }) => vote >= 5) && !votes.some(({ vote, isRequired, isGroup }) => isRequired && !isGroup && vote <= 0) ? 'approved' : 'required'
-}
-
-const lastPr = (previous: RepoPrs | null, url: string, number: number) =>
-  previous?.url === url ? previous.prs.find(old => old.number === number) : undefined
-
-const commentsIn = (threads: AzThreads) =>
-  (threads ?? []).filter(thread => !thread.isDeleted).flatMap(thread => thread.comments ?? []).filter(c => c.type === 'text' && !c.isDeleted).length
-
-const worst = (runs: Run[]) => [...runs].sort((a, b) => SEVERITY.indexOf(a.state) - SEVERITY.indexOf(b.state))[0] ?? null
-
-function pipelineOf(checks: GhCheck[] | null | undefined, slug: string): Run | null {
-  const actions = `https://github.com/${slug}/actions/runs/`.toLowerCase()
-  const builds: Run[] = []
-  const workflows: Run[] = []
-  for (const check of checks ?? []) {
-    const state = checkState(check)
-    const url = check.detailsUrl ?? check.targetUrl ?? ''
-    if (!state) continue
-    if (ADO_BUILD.test(url)) builds.push({ name: check.name ?? check.context ?? 'pipeline', state, url })
-    else if (url.toLowerCase().startsWith(actions))
-      workflows.push({ name: check.workflowName || check.checkSuite?.workflowRun?.workflow.name || check.name || 'workflow', state, url })
-  }
-  return worst(builds.length > 0 ? builds : workflows)
-}
-
-async function cli<T>($: EngineInterface, argv: string[]): Promise<CliResult<T>> {
-  try {
-    const { exitCode, stdout, stderr } = await $.process.run(argv, { timeoutMs: 60_000 })
-    return exitCode === 0 ? { data: JSON.parse(stdout) as T } : { isMissing: /no pull requests found/i.test(stderr) }
-  } catch {
-    return { isUnknown: true }
-  }
-}
-
-async function currentBranch($: EngineInterface) {
-  try {
-    const { exitCode, stdout } = await $.process.run(['git', 'branch', '--show-current'], { timeoutMs: 10_000 })
-    return exitCode === 0 ? stdout.trim() || null : null
-  } catch {
-    return null
-  }
-}
-
-async function fromGitHub($: EngineInterface, slug: string): Promise<Snapshot> {
-  const [owner = '', name = ''] = slug.split('/')
-  const url = `https://github.com/${slug}/pulls`
-  const branch = await currentBranch($)
-  const [open, mine, checks, counts, previous] = await Promise.all([
-    cli<GhOpenPr[]>($, [
-      'gh', 'pr', 'list', '-R', slug, '--state', 'open', '--limit', String(LIMIT + 1),
-      '--json', 'number,title,author,isDraft,url,reviewDecision,latestReviews,statusCheckRollup',
-    ]),
-    cli<GhBranchPr>($, ['gh', 'pr', 'view', '--json', 'number,title,state,isDraft']),
-    branch
-      ? cli<GhRefChecks>($, ['gh', 'api', 'graphql', '-f', `query=${REF_CHECKS}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-f', `ref=refs/heads/${branch}`])
-      : null,
-    cli<GhCommentCounts>($, ['gh', 'api', 'graphql', '-f', `query=${COMMENT_COUNTS}`, '-f', `owner=${owner}`, '-f', `name=${name}`]),
-    read($, repo),
-  ])
-  const commentsOf = (number: number) =>
-    'data' in counts
-      ? (counts.data.data.repository?.pullRequests.nodes.find(node => node.number === number)?.totalCommentsCount ??
-        lastPr(previous, url, number)?.comments ??
-        null)
-      : (lastPr(previous, url, number)?.comments ?? null)
-  const toOpenPr = (pr: GhOpenPr): OpenPr => ({
-    number: pr.number,
-    title: pr.title,
-    author: pr.author?.login ?? 'ghost',
-    isDraft: pr.isDraft,
-    url: pr.url,
-    review: ghReview(pr),
-    comments: commentsOf(pr.number),
-    run: pipelineOf(pr.statusCheckRollup, slug),
-  })
-  return {
-    repo: 'data' in open ? { slug, url, prs: open.data.map(toOpenPr) } : undefined,
-    branchPr: 'data' in mine ? { number: mine.data.number, title: mine.data.title, state: ghState(mine.data) } : 'isMissing' in mine && mine.isMissing ? null : undefined,
-    branchRun: !checks
-      ? null
-      : 'data' in checks
-        ? pipelineOf(checks.data.data.repository?.ref?.target.statusCheckRollup?.contexts.nodes, slug)
-        : undefined,
-  }
-}
-
-/** The organisation URL: the base of the `az --org` argument and of every web link. */
-const azureOrg = (remote: Extract<Remote, { host: 'azure' }>) => `https://dev.azure.com/${remote.org}`
-
-async function fromAzure($: EngineInterface, remote: Extract<Remote, { host: 'azure' }>, s: State): Promise<Snapshot> {
-  const org = azureOrg(remote)
-  const scope = ['--org', org, '--project', remote.project, '-o', 'json']
-  const web = `${org}/${encodeURIComponent(remote.project)}`
-  const git = `${web}/_git/${encodeURIComponent(remote.name)}`
-  const url = `${git}/pullrequests`
-  const branch = await currentBranch($)
-  const prs = (...filter: string[]) =>
-    cli<AzPr[]>($, ['az', 'repos', 'pr', 'list', ...scope, '--repository', remote.name, ...filter, '--query', AZ_PR_FIELDS])
-  const [open, mine, runs, repoId, previous] = await Promise.all([
-    prs('--status', 'active', '--top', String(LIMIT + 1)),
-    branch ? prs('--source-branch', `refs/heads/${branch}`, '--status', 'all', '--top', '1') : null,
-    cli<AzRun[]>($, ['az', 'pipelines', 'runs', 'list', ...scope, '--top', String(AZ_RUNS), '--query-order', 'QueueTimeDesc', '--query', AZ_RUN_FIELDS]),
-    s.repoIds.has(git) ? { data: s.repoIds.get(git) ?? '' } : cli<string>($, ['az', 'repos', 'show', ...scope, '--repository', remote.name, '--query', 'id']),
-    read($, repo),
-  ])
-  if ('data' in repoId) s.repoIds.set(git, repoId.data)
-
-  // Only the project's latest runs are read, so a PR whose run has dropped out of them keeps the last one shown.
-  const known = 'data' in runs && 'data' in repoId ? runs.data.filter(run => run.repo === repoId.data) : null
-  const runOf = (ref: string, all: AzRun[]) => {
-    const matching = all.filter(run => run.branch === ref)
-    const latest = matching.filter((run, i) => matching.findIndex(other => other.definition === run.definition) === i)
-    return worst(latest.map(run => ({ name: run.name, state: azRunState(run), url: `${web}/_build/results?buildId=${run.id}` })))
-  }
-  const toOpenPr = (pr: AzPr): OpenPr => ({
-    number: pr.number,
-    title: pr.title,
-    author: pr.author ?? 'unknown',
-    isDraft: pr.isDraft ?? false,
-    url: `${git}/pullrequest/${pr.number}`,
-    review: azReview(pr),
-    comments: s.commentCounts.get(`${git}/pullrequest/${pr.number}`)?.count ?? lastPr(previous, url, pr.number)?.comments ?? null,
-    run: (known && runOf(`refs/pull/${pr.number}/merge`, known)) || (lastPr(previous, url, pr.number)?.run ?? null),
-  })
-  const branchPr = mine && 'data' in mine ? mine.data[0] : undefined
-  return {
-    repo: 'data' in open ? { slug: `${remote.project}/${remote.name}`, url, prs: open.data.map(toOpenPr) } : undefined,
-    branchPr: !mine ? null : 'data' in mine ? (branchPr ? { number: branchPr.number, title: branchPr.title, state: azState(branchPr) } : null) : undefined,
-    branchRun: !branch ? null : known ? runOf(`refs/heads/${branch}`, known) : undefined,
-  }
-}
-
-// ADO has no comment count on the PR list: each PR costs a threads call, so counts follow the list and refresh more slowly.
-async function countComments($: EngineInterface, remote: Extract<Remote, { host: 'azure' }>, shown: RepoPrs, s: State) {
-  if (!(await isLive($, s))) return
-  const now = await $.clock.now()
-  const countedAt = (pr: OpenPr) => s.commentCounts.get(pr.url)?.at ?? -Infinity
-  const due = shown.prs
-    .slice(0, LIMIT)
-    .filter(pr => now - countedAt(pr) >= COUNT_MS)
-    .sort((a, b) => countedAt(a) - countedAt(b))
-    .slice(0, COUNTS_PER_PASS)
-  for (let i = 0; i < due.length; i += AZ_THREAD_CALLS) {
-    const batch = due.slice(i, i + AZ_THREAD_CALLS)
-    const results = await Promise.all(
-      batch.map(pr =>
-        cli<AzThreads>($, [
-          'az', 'devops', 'invoke', '--org', azureOrg(remote), '--area', 'git', '--resource', 'pullRequestThreads',
-          '--route-parameters', `project=${remote.project}`, `repositoryId=${remote.name}`, `pullRequestId=${pr.number}`,
-          '--api-version', '7.1', '-o', 'json', '--query', AZ_THREADS,
-        ]),
-      ),
-    )
-    const at = await $.clock.now()
-    results.forEach((result, j) => {
-      const pr = batch[j]
-      if (pr && 'data' in result && result.data) s.commentCounts.set(pr.url, { count: commentsIn(result.data), at })
-    })
-    if (await isLive($, s)) await update($, repo, current =>
-      current && { ...current, prs: current.prs.map(pr => ({ ...pr, comments: s.commentCounts.get(pr.url)?.count ?? pr.comments })) },
-    )
-  }
-}
 
 /** The mod's run state, made by each `register` call so a registration starts fresh. */
 type State = {
@@ -319,8 +31,8 @@ type State = {
   isDocked: boolean | undefined
   retry: { cancel: () => void } | undefined
   pressed: number
-  repoIds: Map<string, string>
-  commentCounts: Map<string, { count: number; at: number }>
+  /** One provider per host, made per register, so each provider's caches start empty too. */
+  providers: Record<Remote['host'], Provider>
 }
 
 /** Whether this State belongs to the newest register: each register claims the next generation at `session.start`. */
@@ -329,6 +41,23 @@ async function isLive($: EngineInterface, s: State) {
 }
 
 const isPaneUp = async ($: EngineInterface) => (await $.ui.panes()).some(pane => pane.id === PANE)
+
+/** What the providers reach: the engine's CLI and clock, handed over as functions so no provider is given `$`. */
+function portOf($: EngineInterface): Port {
+  return {
+    run: (argv, timeoutMs = 60_000) => $.process.run(argv, { timeoutMs }),
+    now: () => $.clock.now(),
+  }
+}
+
+async function currentBranch(port: Port) {
+  try {
+    const { exitCode, stdout } = await port.run(['git', 'branch', '--show-current'], 10_000)
+    return exitCode === 0 ? stdout.trim() || null : null
+  } catch {
+    return null
+  }
+}
 
 async function load($: EngineInterface, s: State) {
   if (!(await isLive($, s))) return
@@ -341,22 +70,26 @@ async function load($: EngineInterface, s: State) {
   await countLater?.()
 }
 
-async function fetchPrs($: EngineInterface, s: State) {
+/** Fetches the snapshot and publishes it. Opens the pane itself, after the answer, never inside the provider. */
+async function fetchPrs($: EngineInterface, s: State): Promise<(() => Promise<void>) | undefined> {
+  const port = portOf($)
   const session = await $.session.repo()
   const remote = remoteOf(session?.remote ?? null)
   const origin = session?.remote?.replace(/\/\/[^@/]+@/, '//')
   if (await isLive($, s)) await update($, remoteNote, () => (!session ? 'not in a git repo' : origin ? `origin is ${origin}` : 'no origin remote'))
-  const snapshot: Snapshot = !remote
-    ? { repo: null, branchPr: null, branchRun: null }
-    : remote.host === 'github'
-      ? await fromGitHub($, remote.slug)
-      : await fromAzure($, remote, s)
+
+  // The one host lookup: the provider for the remote's host fetches, names its tool and counts comments.
+  const provider = remote ? s.providers[remote.host] : null
+  const snapshot: Snapshot =
+    remote && provider
+      ? await provider.fetch(port, remote, { branch: await currentBranch(port), previous: await read($, repo) })
+      : { repo: null, branchPr: null, branchRun: null }
 
   // A failed call keeps the last answer; only a confirmed "none" clears it.
   if (snapshot.repo !== undefined && (await isLive($, s))) await update($, repo, () => snapshot.repo ?? null)
   if (snapshot.branchPr !== undefined && (await isLive($, s))) await update($, branchPr, () => snapshot.branchPr ?? null)
   if (snapshot.branchRun !== undefined && (await isLive($, s))) await update($, branchRun, () => snapshot.branchRun ?? null)
-  const failed = snapshot.repo === undefined && remote ? (remote.host === 'github' ? 'gh' : 'az') : null
+  const failed = snapshot.repo === undefined && provider ? provider.cli : null
   if (await isLive($, s)) await update($, failedCli, () => failed)
 
   // One quick retry per run of failures; after that the regular refresh takes over.
@@ -377,8 +110,16 @@ async function fetchPrs($: EngineInterface, s: State) {
   ) {
     await $.ui.open({ id: PANE, title: TITLE })
   }
+
   const shown = snapshot.repo
-  return remote?.host === 'azure' && shown ? () => countComments($, remote, shown, s) : undefined
+  if (!remote || !provider || !shown || !provider.countComments) return undefined
+  const countComments = provider.countComments
+  return async () => {
+    if (!(await isLive($, s))) return
+    await countComments(port, remote, shown, async change => {
+      if (await isLive($, s)) await update($, repo, current => current && { ...current, prs: current.prs.map(change) })
+    })
+  }
 }
 
 /** A superseded register's tick cancels itself rather than refreshing. */
@@ -438,8 +179,7 @@ export const register: Register = on => {
     isDocked: undefined,
     retry: undefined,
     pressed: 0,
-    repoIds: new Map(),
-    commentCounts: new Map(),
+    providers: { github: githubProvider(), azure: azureProvider() },
   }
 
   on('session.start', async ($, e, next) => {

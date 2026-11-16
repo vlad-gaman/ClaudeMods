@@ -1,7 +1,7 @@
 # Pane lifecycle module
 
 Type: grilling
-Status: needs-triage
+Status: ready-for-agent
 Blocked by:
 
 ## Problem
@@ -16,3 +16,7 @@ One module owns open, dismiss and reopen; each mod passes its pane id and view. 
 
 - Packaging: each mod is its own plugin. Can a module be shared across plugins at all? Same question blocks 05.
 - Is a copy-per-mod with a shared test fixture good enough?
+
+## Comments
+
+Spec written: [../../pane-lifecycle/spec.md](../../pane-lifecycle/spec.md). Owner decision: no shared runtime module (mods share no code); shared written rule plus a copied test fixture.

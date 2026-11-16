@@ -21,4 +21,14 @@ It reads the `origin` remote and calls `gh` (GitHub) or `az` (Azure DevOps) in t
 claude plugin test .
 ```
 
-All tests are in `tests/open-prs.test.tsx`. Everything (CLI calls, parsing, state and the pane) is in `hooks/register.tsx`.
+The hook tests in `tests/open-prs.test.tsx` run the pane, the scheduler and retry through the engine. The provider tests in `tests/providers.test.ts` call each provider through its `Port` with a stub CLI and assert the argv of every call.
+
+Files under `hooks/`:
+
+- `register.tsx`: the hooks, the scheduler, retry and the pane.
+- `remote.ts`: reads the `origin` remote as GitHub or Azure DevOps.
+- `provider.ts`: the provider contract, the `Snapshot` (each field tri-state: unknown, none, or a value), the `Port` and the `gh`/`az` call helper.
+- `github.ts`: the GitHub provider, which runs `gh`.
+- `azure.ts`: the Azure DevOps provider, which runs `az`.
+
+A third host is one more provider file and one entry in the `providers` map in `register.tsx`.
