@@ -29,13 +29,13 @@ export const WRITE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'
 export const CACHE_TTL_MIN = 60
 // The cache trigger runs the handoff this many minutes before the cache goes cold.
 export const RUN_BEFORE_COLD_MIN = 5
-
-// How long the cache trigger waits after a turn: the lifetime minus the lead, at least a minute.
-export const cacheWaitMs = (cacheMinutes: number, leadMinutes: number) => Math.max(1, cacheMinutes - leadMinutes) * 60000
 // The context trigger fires once the context passes this many tokens.
 export const CONTEXT_THRESHOLD = 250000
 // It is re-armed once the context falls below this share of the threshold.
 export const CONTEXT_REARM = 0.8
+
+// How long the cache trigger waits after a turn: the lifetime minus the lead, at least a minute.
+export const cacheWaitMs = (cacheMinutes: number, leadMinutes: number) => Math.max(1, cacheMinutes - leadMinutes) * 60000
 
 // The model gets this long to write the summary before the fallback is used.
 export const SUMMARY_TIMEOUT_MS = 120000
