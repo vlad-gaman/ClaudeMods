@@ -24,11 +24,14 @@ export const TITLES: Record<HandoffView['trigger'], string> = {
 export const READ_TOOLS = new Set(['Read'])
 export const WRITE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
 
-// Defaults of the options `cache_minutes`, `lead_minutes` and `context_tokens`
-// (plugin.json). The prompt cache stays warm this many minutes after a turn.
+// Code defaults of the options `cache_minutes`, `lead_minutes` and `context_tokens`; plugin.json
+// holds the same defaults. The prompt cache stays warm this many minutes after a turn.
 export const CACHE_TTL_MIN = 60
 // The cache trigger runs the handoff this many minutes before the cache goes cold.
 export const RUN_BEFORE_COLD_MIN = 5
+
+// How long the cache trigger waits after a turn: the lifetime minus the lead, at least a minute.
+export const cacheWaitMs = (cacheMinutes: number, leadMinutes: number) => Math.max(1, cacheMinutes - leadMinutes) * 60000
 // The context trigger fires once the context passes this many tokens.
 export const CONTEXT_THRESHOLD = 250000
 // It is re-armed once the context falls below this share of the threshold.

@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { cacheLeft, compact, hitPercent, line, toFigures, until } from '../hooks/figures'
+import { CACHE_TTL_MS, cacheLeft, cacheTtlMs, compact, hitPercent, line, toFigures, until } from '../hooks/figures'
 
 const NOW = Date.parse('2026-11-04T12:00:00Z')
 const minutes = (n: number) => new Date(NOW + n * 60000).toISOString()
@@ -100,4 +100,26 @@ test('line says the cache is empty, not cold, before any call has touched it', (
 
 test('line says n/a for figures not measured yet', () => {
   expect(line({}, null, NOW)).toBe('Context n/a  5h n/a  Week n/a  Cache empty')
+})
+
+test('cacheTtlMs reads the cache_minutes option, and falls back to 60 minutes when it is missing or invalid', () => {
+  expect(CACHE_TTL_MS).toBe(60 * 60_000)
+  expect(cacheTtlMs(90)).toBe(90 * 60_000)
+  expect(cacheTtlMs(undefined)).toBe(CACHE_TTL_MS)
+  expect(cacheTtlMs('soon')).toBe(CACHE_TTL_MS)
+})
+
+test('cacheLeft counts down against a non-default lifetime', () => {
+  const chat = (minutesAgo: number) => ({ startedAt: 1, up: 1, down: 1, cacheRead: 0, cachedAt: NOW - minutesAgo * 60000 })
+
+  expect(cacheLeft(chat(60), NOW, 90 * 60_000)).toBe(30)
+  expect(cacheLeft(chat(90), NOW, 90 * 60_000)).toBeUndefined()
+  expect(cacheLeft(chat(30), NOW, 20 * 60_000)).toBeUndefined()
+})
+
+test('the line says warm or cold against a non-default lifetime', () => {
+  const chat = { startedAt: 1, up: 1, down: 1, cacheRead: 0, cachedAt: NOW - 40 * 60000 }
+
+  expect(line({}, chat, NOW, 90 * 60_000)).toContain('Cache warm 50m left')
+  expect(line({}, chat, NOW, 30 * 60_000)).toContain('Cache cold')
 })

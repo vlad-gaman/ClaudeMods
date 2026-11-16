@@ -10,9 +10,10 @@ export const band = (
   f: Figures,
   c: ChatTokens | null,
   now: number,
+  ttlMs: number,
   onHide: () => void | Promise<void>,
 ) => {
-  const { status, detail } = cacheState(f, c, now)
+  const { status, detail } = cacheState(f, c, now, ttlMs)
 
   return (
     <Box flexDirection="column">

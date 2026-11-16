@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { ChatTokens } from '../types'
-import { isCurrent, line, toFigures } from './figures'
+import { cacheTtlMs, isCurrent, line, toFigures } from './figures'
 import type { Measured } from './figures'
 import { band } from './view'
 
@@ -43,7 +43,7 @@ const syncChat = async (
   })
 
 // VS Code and mobile draw no band above the prompt: there the figures go to the status line.
-const setStatusLine = async ($: EngineInterface) => {
+const setStatusLine = async ($: EngineInterface, ttlMs: number) => {
   const surfaces = await $.session.surfaces()
   const f = await read($, figures)
   const needsStatus = surfaces.some(s => s === 'vscode' || s === 'mobile')
@@ -51,36 +51,39 @@ const setStatusLine = async ($: EngineInterface) => {
     $.ui.status(undefined)
     return
   }
-  $.ui.status(line(f, await read($, chat), await $.clock.now()))
+  $.ui.status(line(f, await read($, chat), await $.clock.now(), ttlMs))
 }
 
-const refresh = async ($: EngineInterface) => {
+const refresh = async ($: EngineInterface, ttlMs: number) => {
   const usage = await $.session.usage()
   await loadCompactWindow($)
   await storeFigures($, usage)
   await syncChat($, usage.startedAt, { up: 0, down: 0, cacheRead: 0 })
-  await setStatusLine($)
+  await setStatusLine($, ttlMs)
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  // The prompt cache lifetime, shared in name and default with Session Handoff's cache_minutes.
+  const ttlMs = cacheTtlMs(options.cache_minutes)
+
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     await $.command.register({ name: 'usage-band', description: 'Show or hide the usage band above the prompt' })
-    await refresh($)
+    await refresh($, ttlMs)
 
     return result
   })
 
   on('session.attach', async ($, e, next) => {
     const result = await next(e)
-    await setStatusLine($)
+    await setStatusLine($, ttlMs)
 
     return result
   })
 
   on('session.measure', async ($, e, next) => {
     await storeFigures($, e)
-    await setStatusLine($)
+    await setStatusLine($, ttlMs)
 
     return next(e)
   })
@@ -99,7 +102,7 @@ export const register: Register = on => {
         touchedCache ? await $.clock.now() : undefined,
       )
       await loadCompactWindow($)
-      await setStatusLine($)
+      await setStatusLine($, ttlMs)
     }
 
     return result
@@ -118,9 +121,9 @@ export const register: Register = on => {
     const now = await $.clock.now()
     const parts = $.ui.resolve(e)
     const rest = await next(e)
-    const mine = band(parts, f, c, now, async () => {
+    const mine = band(parts, f, c, now, ttlMs, async () => {
       await update($, isHidden, () => true)
-      await setStatusLine($)
+      await setStatusLine($, ttlMs)
     })
 
     // Pass control on, so other mods' bands draw too.
@@ -129,7 +132,7 @@ export const register: Register = on => {
 
   on('command.run', { command: 'usage-band' }, async ($, e, next) => {
     const hidden = await update($, isHidden, h => !h)
-    await setStatusLine($)
+    await setStatusLine($, ttlMs)
 
     return { text: hidden ? 'Usage band hidden.' : 'Usage band shown.' }
   })

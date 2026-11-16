@@ -18,14 +18,14 @@ The handoff is a Markdown file: the model's summary (goal, current state, decisi
 It starts in one of three ways (the trigger, named in the file):
 
 - `command`: you type `/handoff-session`.
-- `cache`: 55 minutes after a turn ends, 5 minutes before the prompt cache goes cold (cache lifetime minus lead time). A new turn cancels it. It is skipped while an earlier handoff is still showing.
+- `cache`: with the default options, 55 minutes after a turn ends, 5 minutes before the prompt cache goes cold (cache lifetime minus lead time). A new turn cancels it. It is skipped while an earlier handoff is still showing.
 - `context`: the context passes 250k tokens. It fires once, and arms again when the context falls below 80% of the threshold (200k by default).
 
 ## Options
 
-Set in `/config`. The defaults are the values above.
+Set in `/config`. The defaults are the values below, except `cache_minutes`, whose default is in `plugin.json`.
 
-- `cache_minutes` (60): how long the prompt cache stays warm after a turn.
+- `cache_minutes`: how long the prompt cache stays warm after a turn. Usage Band has an option of the same name; set both to the same value.
 - `lead_minutes` (5): the cache handoff runs this long before the cache goes cold. The wait is `cache_minutes - lead_minutes`, at least 1 minute.
 - `context_tokens` (250000): the context handoff fires past this many tokens.
 

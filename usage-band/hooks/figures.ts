@@ -48,12 +48,17 @@ const limitColor = (percent: number | undefined) => severity(percent, 75, 90)
 export const isCurrent = (c: ChatTokens | null, startedAt?: number): c is ChatTokens =>
   c !== null && typeof c.up === 'number' && (startedAt === undefined || c.startedAt === startedAt)
 
-// The prompt cache lives an hour from the last call that wrote or read it.
+// The prompt cache lifetime's default (`cache_minutes` in plugin.json): 60 minutes from the last
+// call that wrote or read it. The option overrides it; see cacheTtlMs.
 export const CACHE_TTL_MS = 60 * 60_000
 
-export const cacheLeft = (c: ChatTokens | null, now: number): number | undefined => {
+// The lifetime in ms from the `cache_minutes` option. Like Session Handoff, a missing or invalid
+// value falls back to the default.
+export const cacheTtlMs = (minutes: unknown): number => (typeof minutes === 'number' ? minutes * 60_000 : CACHE_TTL_MS)
+
+export const cacheLeft = (c: ChatTokens | null, now: number, ttlMs = CACHE_TTL_MS): number | undefined => {
   if (!c?.cachedAt) return undefined
-  const left = c.cachedAt + CACHE_TTL_MS - now
+  const left = c.cachedAt + ttlMs - now
 
   return left > 0 ? Math.ceil(left / 60000) : undefined
 }
@@ -81,8 +86,8 @@ const recacheText = (f: Figures) =>
 // `empty`: no call has written or read the cache yet (a new session), so it is neither warm nor cold.
 export type CacheState = { status: 'warm' | 'cold' | 'empty'; detail: string }
 
-export const cacheState = (f: Figures, c: ChatTokens | null, now: number): CacheState => {
-  const left = cacheLeft(c, now)
+export const cacheState = (f: Figures, c: ChatTokens | null, now: number, ttlMs = CACHE_TTL_MS): CacheState => {
+  const left = cacheLeft(c, now, ttlMs)
   const hit = hitPercent(c)
 
   if (!c?.cachedAt) return { status: 'empty', detail: '' }
@@ -125,8 +130,8 @@ export const segments = (f: Figures, c: ChatTokens | null, now: number): Segment
   ]
 }
 
-export const line = (f: Figures, c: ChatTokens | null, now: number) => {
-  const { status, detail } = cacheState(f, c, now)
+export const line = (f: Figures, c: ChatTokens | null, now: number, ttlMs = CACHE_TTL_MS) => {
+  const { status, detail } = cacheState(f, c, now, ttlMs)
 
   return [
     ...segments(f, c, now).map(s => `${s.label} ${s.value}${s.detail}`),

@@ -12,6 +12,12 @@ A band above the prompt showing usage for this chat, the 5h window and the week.
 
 The **Hide** button hides the band.
 
+## Options
+
+Set in `/config`.
+
+- `cache_minutes` (60): how long the prompt cache stays warm after a call. The cache state and minutes left count against it. Session Handoff has an option of the same name; set both to the same value.
+
 ## Commands
 
 - `/usage-band`: hide or show the band.
