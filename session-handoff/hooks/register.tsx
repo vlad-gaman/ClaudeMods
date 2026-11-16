@@ -4,6 +4,7 @@ import type { EngineInterface as Engine, Register } from 'claude-code'
 import type { HandoffStep, HandoffView } from '../types'
 import {
   CACHE_TTL_MIN,
+  cacheWaitMs,
   CONTEXT_THRESHOLD,
   RUN_BEFORE_COLD_MIN,
   SUMMARY_PROMPT,
@@ -200,7 +201,7 @@ export const register: Register = (on, options) => {
 
     // Trigger 2: the cache goes cold `lead_minutes` minutes from now.
     run.cacheTimer?.cancel()
-    const wait = Math.max(1, cacheMinutes - leadMinutes) * 60000
+    const wait = cacheWaitMs(cacheMinutes, leadMinutes)
     run.cacheTimer = $.clock.after(wait, () => {
       run.cacheTimer = null
       void (async () => {
