@@ -18,7 +18,7 @@ test('savePlan names the files, writes the document then the prompt, and sets th
   expect(plan.view).toEqual({ path, promptPath, prompt: plan.prompt, cwd: '/p' })
 })
 
-test('the document is the first write, so a failed first write leaves no prompt behind', () => {
+test('the document is written before the prompt', () => {
   const [first, second] = savePlan('/d', NOW, 'abcdef123456', '/p', 'DOC').writes
   expect(first!.path.endsWith('.md')).toBe(true)
   expect(second!.path.endsWith('.prompt.txt')).toBe(true)

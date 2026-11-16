@@ -15,7 +15,7 @@ export const withStep = (
 ): HandoffStep[] => steps.map((s, n) => (n === STEPS.indexOf(name) ? { ...s, status, detail } : s))
 
 // The phase and steps after `error` stops the run at `name`.
-export const failed = (
+export const failedPatch = (
   steps: HandoffStep[],
   name: StepName,
   error: unknown,

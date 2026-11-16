@@ -20,7 +20,7 @@ import {
   userRequests,
 } from './document'
 import { savePlan } from './save'
-import { failed, stepList, withStep } from './steps'
+import { failedPatch, stepList, withStep } from './steps'
 import { raceSummary, summaryDetail, summaryText } from './summary'
 import { contextTrigger } from './trigger'
 import { verifySaved } from './verify'
@@ -153,7 +153,7 @@ async function runHandoff(
     await setStep('check', 'done', `${verdict.characters} characters verified`)
     await patch($, id, v => ({ ...v, phase: 'ready' }))
   } catch (error) {
-    await patch($, id, v => ({ ...v, ...failed(v.steps, step, error) }))
+    await patch($, id, v => ({ ...v, ...failedPatch(v.steps, step, error) }))
   } finally {
     run.isRunning = false
     await persist($)
