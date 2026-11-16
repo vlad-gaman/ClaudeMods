@@ -1,7 +1,7 @@
 # One owner for the prompt cache lifetime
 
 Type: research
-Status: needs-info
+Status: ready-for-agent
 Blocked by:
 
 ## Problem
@@ -15,3 +15,7 @@ Can plugins share a module or read another mod's option? If yes, build one promp
 ## Done when
 
 The packaging answer is recorded here, then a task ticket is raised for the chosen route. Smallest candidate, a real bug.
+
+## Comments
+
+Spec written: [../../prompt-cache-lifetime/spec.md](../../prompt-cache-lifetime/spec.md). Owner decision: research whether the engine exposes the cache expiry first; fallback is a per-mod cache_minutes option with a drift test.

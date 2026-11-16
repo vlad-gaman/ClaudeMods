@@ -1,8 +1,8 @@
 # Make runHandoff's steps testable
 
 Type: task
-Status: needs-triage
-Blocked by: 04
+Status: ready-for-agent
+Blocked by:
 
 ## Problem
 
@@ -11,3 +11,7 @@ Blocked by: 04
 ## Goal
 
 A handoff-run module with an in-memory engine adapter. Speculative: one real adapter today, so the seam stays hypothetical unless 04 supplies a second. Revisit after 04; wontfix if 04 is rejected.
+
+## Comments
+
+Spec written: [../../run-handoff-steps/spec.md](../../run-handoff-steps/spec.md). Owner decision: extract pure steps, no adapter seam (ticket 04 supplied no second adapter, so the Blocked by line is dropped).
