@@ -6,8 +6,6 @@ import {
   CACHE_TTL_MIN,
   CONTEXT_THRESHOLD,
   RUN_BEFORE_COLD_MIN,
-  STEPS,
-  STEP_LABELS,
   SUMMARY_PROMPT,
   SUMMARY_TIMEOUT_MS,
   TITLES,
@@ -16,14 +14,16 @@ import type { StepName } from './data'
 import {
   buildDocument,
   classifyFiles,
-  continuePrompt,
   fallbackNarrative,
   handoffDir,
-  handoffPaths,
   tally,
   userRequests,
 } from './document'
+import { savePlan } from './save'
+import { failed, stepList, withStep } from './steps'
+import { raceSummary, summaryDetail, summaryText } from './summary'
 import { contextTrigger } from './trigger'
+import { verifySaved } from './verify'
 import { band } from './view'
 
 const view = atom({ plugin: 'session-handoff', key: 'view' } as const, null)
@@ -64,25 +64,17 @@ async function runHandoff(
   if (run.isRunning) return
   run.isRunning = true
   const id = ++run.id
-  const steps: HandoffStep[] = STEPS.map(name => ({
-    label: STEP_LABELS[name],
-    status: 'pending',
-  }))
   await update($, view, () => ({
     id,
     trigger,
     title: TITLES[trigger],
-    steps,
+    steps: stepList(),
     phase: 'working',
     isDismissed: false,
   }))
 
   const setStep = async (name: StepName, status: HandoffStep['status'], detail?: string) => {
-    const index = STEPS.indexOf(name)
-    await patch($, id, v => ({
-      ...v,
-      steps: v.steps.map((s, n) => (n === index ? { ...s, status, detail } : s)),
-    }))
+    await patch($, id, v => ({ ...v, steps: withStep(v.steps, name, status, detail) }))
     $.ui.invalidate('ui.render')
   }
 
@@ -121,18 +113,14 @@ async function runHandoff(
     step = 'write'
     await setStep('write', 'running', 'asking the model for a summary, can take a minute')
     const requests = userRequests(messages)
-    const forked = await Promise.race([
+    // a failed fork is treated as no summary: the fallback is used
+    const forked = await raceSummary(
       $.model.fork({ prompt: SUMMARY_PROMPT }),
       $.clock.sleep(SUMMARY_TIMEOUT_MS).then(() => null),
-    ]).catch(() => null) // a failed fork is treated as no summary: the fallback is used
-    const narrative =
-      forked && forked.isAnswered && forked.text.trim() !== ''
-        ? forked.text.trim()
-        : fallbackNarrative(requests)
+    )
+    const narrative = summaryText(forked) ?? fallbackNarrative(requests)
 
     const dir = handoffDir(await $.env.get('USERPROFILE'), await $.env.get('HOME'))
-    const { path, promptPath } = handoffPaths(dir, now, sessionId)
-    const prompt = continuePrompt(path, cwd)
     const doc = buildDocument({
       sessionId,
       cwd,
@@ -146,44 +134,26 @@ async function runHandoff(
       tally: counts,
       requests,
     })
-    await setStep(
-      'write',
-      'done',
-      forked && forked.isAnswered ? 'summary by the model' : 'summary from last requests',
-    )
+    const plan = savePlan(dir, now, sessionId, cwd, doc)
+    await setStep('write', 'done', summaryDetail(forked))
 
     step = 'save'
     await setStep('save', 'running')
-    await $.fs.write(path, doc)
-    await $.fs.write(promptPath, prompt)
-    await patch($, id, v => ({ ...v, path, promptPath, prompt, cwd }))
-    await setStep('save', 'done', path)
+    for (const write of plan.writes) await $.fs.write(write.path, write.text)
+    await patch($, id, v => ({ ...v, ...plan.view }))
+    await setStep('save', 'done', plan.path)
 
     step = 'check'
     await setStep('check', 'running')
-    const savedDoc = await $.fs.read(path)
-    const savedPrompt = await $.fs.read(promptPath)
-    if (
-      typeof savedDoc !== 'string' ||
-      savedDoc.length !== doc.length ||
-      !savedDoc.includes('## Recent user requests') ||
-      typeof savedPrompt !== 'string' ||
-      savedPrompt !== prompt
-    ) {
-      throw new Error('the saved file does not match what was written')
-    }
-    await setStep('check', 'done', `${savedDoc.length} characters verified`)
+    const verdict = verifySaved(
+      { doc: await $.fs.read(plan.path), prompt: await $.fs.read(plan.promptPath) },
+      { doc, prompt: plan.prompt },
+    )
+    if (!verdict.isOk) throw new Error(verdict.message)
+    await setStep('check', 'done', `${verdict.characters} characters verified`)
     await patch($, id, v => ({ ...v, phase: 'ready' }))
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    const index = STEPS.indexOf(step)
-    await patch($, id, v => ({
-      ...v,
-      phase: 'failed',
-      steps: v.steps.map((s, n) =>
-        n === index ? { ...s, status: 'error', detail: message } : s,
-      ),
-    }))
+    await patch($, id, v => ({ ...v, ...failed(v.steps, step, error) }))
   } finally {
     run.isRunning = false
     await persist($)
