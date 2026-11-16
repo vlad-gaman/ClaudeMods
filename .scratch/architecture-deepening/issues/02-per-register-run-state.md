@@ -56,3 +56,20 @@ Both files keep their CRLF or LF line endings.
 - **Skill-run log scope:** pre-existing. `readLog`, `appendLog` and the `writing` queue were in model-router before this ticket (the Problem cites them at l.44-87); the ticket moved the queue into State and did not add the log.
 - **New test:** "a run appended after an earlier session keeps the lines that session logged" guards the seeding path. It would also pass on the old code, so it is a regression guard, not a red test.
 - **Results:** `claude plugin test .` in model-router: `66 pass`, `0 fail`. Type-check (TypeScript 6.0.3, scratch copy with the engine types): exit 0.
+
+### Review fixes (open-prs/hooks/register.tsx)
+
+- **Stale State:** new engine atom `generation`. `session.start` claims the next value into `s.generation`; `isLive` compares it with the atom. A superseded State's tick cancels itself, and `load`, `fetchPrs`, `countComments` and each atom write check `isLive` first. The check reads the atom, so no module-level state was added.
+- **Reopening:** `isOpened` is gone. The pane opens only when `$.ui.panes()` (the engine's record) does not list `open-prs` and `isDismissed` is false.
+- **Azure base URL:** `azureOrg(remote)` builds `https://dev.azure.com/<org>` for `--org`, the web links and the threads call.
+- **CliResult:** a thrown or never-run call is `{ isUnknown: true }`, not `isMissing: false`.
+
+### Test
+
+- Added `opening again > does not open the pane again when it is already open`. The test engine now answers `ui.panes` and records each `ui.open` as an open pane. Before the change it failed with `Received: ["open-prs"]`.
+- Not written: a stale-tick test, an in-flight write test, and a dismissed-pane test. The harness registers once per test, the test `$` has no `$.state`, and a test cannot write plugin atoms, so a second register and the generation bump cannot be produced. The `isLive` guard is checked by review only, so the first "Done when" test is still open.
+
+### Results
+
+- `claude plugin test .` in open-prs: `111 pass`, `0 fail`, `Ran 111 tests across 1 file.` (110 before, plus the new test).
+- Type-check: TypeScript 5.9.2, `tsc -p . --noEmit` in a scratch copy with the engine types from `session-handoff/.claude-plugin/types`: exit 0.

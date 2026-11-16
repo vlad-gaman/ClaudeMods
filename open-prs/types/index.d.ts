@@ -32,6 +32,7 @@ declare module 'claude-code' {
       failedCli: 'gh' | 'az' | null
       isRefreshing: boolean
       remoteNote: string
+      generation: number
     }
   }
 }

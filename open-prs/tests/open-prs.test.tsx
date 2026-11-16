@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
-import type { On, UiOpenResult } from 'claude-code'
+import type { On, UiOpenResult, UiPane } from 'claude-code'
 
 const SURFACES = ['terminal', 'desktop', 'vscode'] as const
 const NO_PR = 'no pull requests found for branch "main"'
@@ -87,6 +87,7 @@ function engine(
   }
   const calls: string[][] = []
   const opens: string[] = []
+  const panes: UiPane[] = []
   const commands: string[] = []
   const repoReads = { count: 0 }
 
@@ -98,8 +99,10 @@ function engine(
   })
   on('ui.open', (_, e) => {
     opens.push(e.id)
+    panes.push({ id: e.id, title: 'Open PRs', isShown: true, isFocused: false, isPlaced: placed.isPlaced })
     return { value: placed }
   })
+  on('ui.panes', () => ({ value: panes }))
   on('session.repo', () => {
     repoReads.count++
     return { value: remote === null ? null : { root: '/repo', remote, internal: false, name: null } }
@@ -115,7 +118,7 @@ function engine(
   })
 
   const callsTo = (key: keyof Cli) => calls.filter(argv => route(argv) === key)
-  return { clock, cli, calls, callsTo, opens, commands, repoReads }
+  return { clock, cli, calls, callsTo, opens, commands, repoReads, panes }
 }
 
 async function start($: Engine, clock: ReturnType<typeof mock.clock>) {
@@ -1275,5 +1278,19 @@ describe('refresh', () => {
     const { texts } = await pane($)
     expect(texts).not.toContain('This branch: #12 open')
     expect(texts).not.toContain('← this branch')
+  })
+})
+
+describe('opening again', () => {
+  test('does not open the pane again when it is already open', async ($, on) => {
+    // Arrange
+    const { clock, opens, panes } = engine(on)
+    panes.push({ id: 'open-prs', title: 'Open PRs', isShown: true, isFocused: false, isPlaced: true })
+
+    // Act
+    await start($, clock)
+
+    // Assert
+    expect(opens).toEqual([])
   })
 })

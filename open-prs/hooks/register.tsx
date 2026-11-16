@@ -11,6 +11,7 @@ const isLoaded = atom({ plugin: 'open-prs', key: 'isLoaded' } as const, false)
 const failedCli = atom({ plugin: 'open-prs', key: 'failedCli' } as const, null)
 const isRefreshing = atom({ plugin: 'open-prs', key: 'isRefreshing' } as const, false)
 const remoteNote = atom({ plugin: 'open-prs', key: 'remoteNote' } as const, '')
+const generation = atom({ plugin: 'open-prs', key: 'generation' } as const, 0)
 
 const REFRESH_MS = 3 * 60_000
 const RETRY_MS = 30_000
@@ -60,7 +61,8 @@ type AzPr = {
 }
 type AzThreads = { isDeleted: boolean | null; comments: { type: string | null; isDeleted: boolean | null }[] | null }[] | null
 type AzRun = { id: number; branch: string; status: string; result: string | null; name: string; definition: number; repo: string | null }
-type CliResult<T> = { data: T } | { isMissing: boolean }
+/** `isMissing`: the call ran and failed; `isUnknown`: it threw or never ran, so whether the thing exists is not known. */
+type CliResult<T> = { data: T } | { isMissing: boolean } | { isUnknown: true }
 type Remote = { host: 'github'; slug: string } | { host: 'azure'; org: string; project: string; name: string }
 type Snapshot = { repo?: RepoPrs | null; branchPr?: BranchPr | null; branchRun?: Run | null }
 
@@ -174,7 +176,7 @@ async function cli<T>($: EngineInterface, argv: string[]): Promise<CliResult<T>>
     const { exitCode, stdout, stderr } = await $.process.run(argv, { timeoutMs: 60_000 })
     return exitCode === 0 ? { data: JSON.parse(stdout) as T } : { isMissing: /no pull requests found/i.test(stderr) }
   } catch {
-    return { isMissing: false }
+    return { isUnknown: true }
   }
 }
 
@@ -221,7 +223,7 @@ async function fromGitHub($: EngineInterface, slug: string): Promise<Snapshot> {
   })
   return {
     repo: 'data' in open ? { slug, url, prs: open.data.map(toOpenPr) } : undefined,
-    branchPr: 'data' in mine ? { number: mine.data.number, title: mine.data.title, state: ghState(mine.data) } : mine.isMissing ? null : undefined,
+    branchPr: 'data' in mine ? { number: mine.data.number, title: mine.data.title, state: ghState(mine.data) } : 'isMissing' in mine && mine.isMissing ? null : undefined,
     branchRun: !checks
       ? null
       : 'data' in checks
@@ -230,9 +232,13 @@ async function fromGitHub($: EngineInterface, slug: string): Promise<Snapshot> {
   }
 }
 
+/** The organisation URL: the base of the `az --org` argument and of every web link. */
+const azureOrg = (remote: Extract<Remote, { host: 'azure' }>) => `https://dev.azure.com/${remote.org}`
+
 async function fromAzure($: EngineInterface, remote: Extract<Remote, { host: 'azure' }>, s: State): Promise<Snapshot> {
-  const scope = ['--org', `https://dev.azure.com/${remote.org}`, '--project', remote.project, '-o', 'json']
-  const web = `https://dev.azure.com/${encodeURIComponent(remote.org)}/${encodeURIComponent(remote.project)}`
+  const org = azureOrg(remote)
+  const scope = ['--org', org, '--project', remote.project, '-o', 'json']
+  const web = `${org}/${encodeURIComponent(remote.project)}`
   const git = `${web}/_git/${encodeURIComponent(remote.name)}`
   const url = `${git}/pullrequests`
   const branch = await currentBranch($)
@@ -274,6 +280,7 @@ async function fromAzure($: EngineInterface, remote: Extract<Remote, { host: 'az
 
 // ADO has no comment count on the PR list: each PR costs a threads call, so counts follow the list and refresh more slowly.
 async function countComments($: EngineInterface, remote: Extract<Remote, { host: 'azure' }>, shown: RepoPrs, s: State) {
+  if (!(await isLive($, s))) return
   const now = await $.clock.now()
   const countedAt = (pr: OpenPr) => s.commentCounts.get(pr.url)?.at ?? -Infinity
   const due = shown.prs
@@ -286,7 +293,7 @@ async function countComments($: EngineInterface, remote: Extract<Remote, { host:
     const results = await Promise.all(
       batch.map(pr =>
         cli<AzThreads>($, [
-          'az', 'devops', 'invoke', '--org', `https://dev.azure.com/${remote.org}`, '--area', 'git', '--resource', 'pullRequestThreads',
+          'az', 'devops', 'invoke', '--org', azureOrg(remote), '--area', 'git', '--resource', 'pullRequestThreads',
           '--route-parameters', `project=${remote.project}`, `repositoryId=${remote.name}`, `pullRequestId=${pr.number}`,
           '--api-version', '7.1', '-o', 'json', '--query', AZ_THREADS,
         ]),
@@ -297,7 +304,7 @@ async function countComments($: EngineInterface, remote: Extract<Remote, { host:
       const pr = batch[j]
       if (pr && 'data' in result && result.data) s.commentCounts.set(pr.url, { count: commentsIn(result.data), at })
     })
-    await update($, repo, current =>
+    if (await isLive($, s)) await update($, repo, current =>
       current && { ...current, prs: current.prs.map(pr => ({ ...pr, comments: s.commentCounts.get(pr.url)?.count ?? pr.comments })) },
     )
   }
@@ -308,7 +315,7 @@ type State = {
   tick: { cancel: () => void } | undefined
   fetching: Promise<void> | undefined
   fetchedAt: number
-  isOpened: boolean
+  generation: number | undefined
   isDocked: boolean | undefined
   retry: { cancel: () => void } | undefined
   pressed: number
@@ -316,12 +323,20 @@ type State = {
   commentCounts: Map<string, { count: number; at: number }>
 }
 
+/** Whether this State belongs to the newest register: each register claims the next generation at `session.start`. */
+async function isLive($: EngineInterface, s: State) {
+  return s.generation !== undefined && (await read($, generation)) === s.generation
+}
+
+const isPaneUp = async ($: EngineInterface) => (await $.ui.panes()).some(pane => pane.id === PANE)
+
 async function load($: EngineInterface, s: State) {
+  if (!(await isLive($, s))) return
   let countLater: (() => Promise<void>) | undefined
   try {
     countLater = await fetchPrs($, s)
   } finally {
-    await update($, isLoaded, () => true)
+    if (await isLive($, s)) await update($, isLoaded, () => true)
   }
   await countLater?.()
 }
@@ -330,7 +345,7 @@ async function fetchPrs($: EngineInterface, s: State) {
   const session = await $.session.repo()
   const remote = remoteOf(session?.remote ?? null)
   const origin = session?.remote?.replace(/\/\/[^@/]+@/, '//')
-  await update($, remoteNote, () => (!session ? 'not in a git repo' : origin ? `origin is ${origin}` : 'no origin remote'))
+  if (await isLive($, s)) await update($, remoteNote, () => (!session ? 'not in a git repo' : origin ? `origin is ${origin}` : 'no origin remote'))
   const snapshot: Snapshot = !remote
     ? { repo: null, branchPr: null, branchRun: null }
     : remote.host === 'github'
@@ -338,30 +353,42 @@ async function fetchPrs($: EngineInterface, s: State) {
       : await fromAzure($, remote, s)
 
   // A failed call keeps the last answer; only a confirmed "none" clears it.
-  if (snapshot.repo !== undefined) await update($, repo, () => snapshot.repo ?? null)
-  if (snapshot.branchPr !== undefined) await update($, branchPr, () => snapshot.branchPr ?? null)
-  if (snapshot.branchRun !== undefined) await update($, branchRun, () => snapshot.branchRun ?? null)
+  if (snapshot.repo !== undefined && (await isLive($, s))) await update($, repo, () => snapshot.repo ?? null)
+  if (snapshot.branchPr !== undefined && (await isLive($, s))) await update($, branchPr, () => snapshot.branchPr ?? null)
+  if (snapshot.branchRun !== undefined && (await isLive($, s))) await update($, branchRun, () => snapshot.branchRun ?? null)
   const failed = snapshot.repo === undefined && remote ? (remote.host === 'github' ? 'gh' : 'az') : null
-  await update($, failedCli, () => failed)
+  if (await isLive($, s)) await update($, failedCli, () => failed)
 
   // One quick retry per run of failures; after that the regular refresh takes over.
-  if (failed && !s.retry) s.retry = $.clock.after(RETRY_MS, () => void refresh($, s))
+  if (failed && !s.retry && (await isLive($, s))) s.retry = $.clock.after(RETRY_MS, () => void refresh($, s))
   else if (!failed) {
     s.retry?.cancel()
     s.retry = undefined
   }
 
-  // Opened unasked only where it docks beside the transcript, never inline above the prompt.
-  if (snapshot.repo?.prs.length && !s.isOpened && s.isDocked !== false && !(await read($, isDismissed))) {
+  // Opened unasked only where it docks beside the transcript, never inline above the prompt, never over a pane
+  // already up, and never once the person has closed it.
+  if (
+    snapshot.repo?.prs.length &&
+    s.isDocked !== false &&
+    (await isLive($, s)) &&
+    !(await read($, isDismissed)) &&
+    !(await isPaneUp($))
+  ) {
     await $.ui.open({ id: PANE, title: TITLE })
-    s.isOpened = true
   }
   const shown = snapshot.repo
   return remote?.host === 'azure' && shown ? () => countComments($, remote, shown, s) : undefined
 }
 
+/** A superseded register's tick cancels itself rather than refreshing. */
+async function onTick($: EngineInterface, s: State) {
+  if (await isLive($, s)) return refresh($, s)
+  s.tick?.cancel()
+}
+
 function refresh($: EngineInterface, s: State) {
-  s.tick ??= $.clock.every(REFRESH_MS, () => void refresh($, s))
+  s.tick ??= $.clock.every(REFRESH_MS, () => void onTick($, s))
   s.fetching ??= load($, s)
     .catch(() => {})
     .then(async () => {
@@ -407,7 +434,7 @@ export const register: Register = on => {
     tick: undefined,
     fetching: undefined,
     fetchedAt: 0,
-    isOpened: false,
+    generation: undefined,
     isDocked: undefined,
     retry: undefined,
     pressed: 0,
@@ -417,6 +444,7 @@ export const register: Register = on => {
 
   on('session.start', async ($, e, next) => {
     const started = await next(e)
+    s.generation = await update($, generation, n => n + 1)
     await update($, isRefreshing, () => false)
     await $.command.register({ name: 'prs', description: "Show the repo's open GitHub or Azure DevOps PRs and their pipelines in a side pane" })
     kick($, s)
@@ -425,7 +453,6 @@ export const register: Register = on => {
 
   on('command.run', { command: 'prs' }, async ($, e) => {
     await update($, isDismissed, () => false)
-    s.isOpened = true
     const opened = await $.ui.open({ id: PANE, title: TITLE })
     kick($, s)
     return { text: opened.isPlaced ? 'Open PRs pane opened.' : `Open PRs pane is waiting: ${opened.reason}` }
