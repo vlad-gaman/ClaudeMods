@@ -14,11 +14,10 @@ Every mod creates its run state per `register` call with one reset rule; three c
 
 ## Done when
 
-- No module-level mutable state in `open-prs` or `model-router` register paths.
-- Tests no longer depend on cross-test leakage (add a test that registers twice and sees fresh state).
+- No module-level mutable JavaScript state in `open-prs` or `model-router` register paths. Engine atoms stay module-level (they are engine-owned, persisted state); model-router's skill-run log is written through one (`runLog`), so two States that overlap share its compare-and-set.
+- Tests no longer depend on cross-test leakage. The harness registers once per test, so a register-twice test cannot be written through it; the log's cross-State guarantee is covered by the atom compare-and-set and a test that appends to a log an earlier session wrote.
 - Tests and type-check pass in each touched mod.
-
-Note: `open-prs` and `model-router` are untracked; coordinate with the owner's uncommitted work before editing.
+- Both mods are committed (93c2f0a), so the earlier "untracked" note no longer applies.
 
 ## Comments
 
@@ -49,3 +48,11 @@ Both files keep their CRLF or LF line endings.
 - `claude plugin test .` in model-router: `65 pass`, `0 fail`, `Ran 65 tests across 1 file`.
 - Type-check: TypeScript 5.9.2 (Antigravity copy), `tsc -p . --noEmit` in a scratch copy of each mod with the engine types from `~/.claude/dev-mods/37d6be3b.../session-panel/.claude-plugin/types`. open-prs exit 0, model-router exit 0. The repo has no `.claude-plugin/types` base, so this uses a copy.
 - code-review skill: not run as written. It diffs `HEAD` against a fixed point, and both mods are untracked. Review was done by reading the changes directly.
+
+### Follow-up review of model-router
+
+- **Stale State log writes:** `appendLog` queued writes on `s.writing`, so two States (old and new after a re-register) could read the same file and drop each other's lines. The log now lives in an engine atom (`runLog`, `{ seq, runs }`); each append is an `update` (compare-and-set with retry), and the file is written from that value. After each write the value is re-read, and a write that a newer append overtook is redone. Seeding from the file happens when `seq` is 0. A disposal flag was not added: a stale State's runs are real runs, and a flag would drop them.
+- **Reset and lock literal:** `newState()` builds the State in `register`; `endTurn(s)` is the one reset used by `turn.complete`. `lockFor(choice, sessionModel, startedAt, isPinned)` builds the `Lock` at the four sites (`/route`, `/model` change, resumed session, default).
+- **Skill-run log scope:** pre-existing. `readLog`, `appendLog` and the `writing` queue were in model-router before this ticket (the Problem cites them at l.44-87); the ticket moved the queue into State and did not add the log.
+- **New test:** "a run appended after an earlier session keeps the lines that session logged" guards the seeding path. It would also pass on the old code, so it is a regression guard, not a red test.
+- **Results:** `claude plugin test .` in model-router: `66 pass`, `0 fail`. Type-check (TypeScript 6.0.3, scratch copy with the engine types): exit 0.

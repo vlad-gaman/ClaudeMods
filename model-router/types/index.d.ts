@@ -15,6 +15,6 @@ export type SkillRun = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'model-router': { lock: Lock | null; isOff: boolean }
+    'model-router': { lock: Lock | null; isOff: boolean; skillLog: { seq: number; runs: SkillRun[] } }
   }
 }

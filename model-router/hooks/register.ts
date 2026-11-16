@@ -84,8 +84,22 @@ type State = {
   openRuns: OpenRun[]
   expected: string[]
   agentModels: Map<string, Set<string>>
-  writing: Promise<unknown>
 }
+const newState = (): State => ({ hinted: new Set(), pinnedSkill: undefined, openRuns: [], expected: [], agentModels: new Map() })
+/** What one turn of the main loop holds; `expected` is cleared by the next prompt instead. */
+function endTurn(s: State) {
+  s.openRuns.length = 0
+  s.agentModels.clear()
+  s.pinnedSkill = undefined
+}
+
+const lockFor = (choice: Choice, sessionModel: string, startedAt: number, isPinned = false): Lock => ({
+  tier: choice.tier,
+  reason: choice.reason,
+  sessionModel,
+  startedAt,
+  isPinned,
+})
 
 const isLogOff = async ($: EngineInterface) => (await $.store.get('isLogOff')) === true
 const usdNow = async ($: EngineInterface) => (await $.session.usage()).cost?.usd
@@ -123,15 +137,26 @@ async function readLog($: EngineInterface): Promise<SkillRun[]> {
     })
 }
 
-function appendLog($: EngineInterface, s: State, runs: SkillRun[]) {
-  // One write at a time, so two runs closing together don't drop each other's line.
-  s.writing = s.writing
-    .then(async () => {
-      const all = [...(await readLog($)), ...runs].slice(-LOG_CAP)
-      await $.fs.write(logPath($), all.map(r => JSON.stringify(r)).join('\n') + '\n')
-    })
-    .catch(() => undefined)
-  return s.writing
+// The log's runs live in an engine atom, so every State (a re-register leaves the old one running) appends through the same
+// compare-and-set. The file is written from that value; a write that lands after a newer append is redone.
+type LogState = { seq: number; runs: SkillRun[] }
+const runLog = atom({ plugin: 'model-router', key: 'skillLog' } as const, { seq: 0, runs: [] } as LogState)
+
+async function appendLog($: EngineInterface, runs: SkillRun[]) {
+  try {
+    if ((await read($, runLog)).seq === 0) {
+      const fromFile = await readLog($)
+      await update($, runLog, v => (v.seq === 0 ? { seq: 1, runs: fromFile } : v))
+    }
+    let current = await update($, runLog, v => ({ seq: v.seq + 1, runs: [...v.runs, ...runs].slice(-LOG_CAP) }))
+    for (let written = 0; written !== current.seq; ) {
+      written = current.seq
+      await $.fs.write(logPath($), current.runs.map(r => JSON.stringify(r)).join('\n') + '\n')
+      current = await read($, runLog)
+    }
+  } catch {
+    // A log that cannot be written never breaks the run.
+  }
 }
 
 async function pickOf($: EngineInterface, frontmatter: SkillFrontmatter) {
@@ -156,7 +181,6 @@ async function closeRuns($: EngineInterface, s: State, runs: OpenRun[], outcome?
   }
   await appendLog(
     $,
-    s,
     runs.map(run => ({
       at: new Date(run.startedAt).toISOString(),
       skill: run.skill,
@@ -212,7 +236,7 @@ async function status($: EngineInterface, defaultTier: ModelTier) {
 
 export const register: Register = (on, options) => {
   const defaultTier: ModelTier = tierOf(String(options.defaultModel ?? 'sonnet')) ?? 'sonnet'
-  const s: State = { hinted: new Set(), pinnedSkill: undefined, openRuns: [], expected: [], agentModels: new Map(), writing: Promise.resolve() }
+  const s = newState()
   let typed: string | undefined
 
   on('session.start', async ($, e, next) => {
@@ -246,7 +270,7 @@ export const register: Register = (on, options) => {
       const sessionTier = tierOf(sessionModel)
       if (!sessionTier) return { text: await status($, defaultTier) }
       const choice = fit({ tier, reason: 'set with /route' }, sessionModel)
-      await lockTo($, s, { ...choice, sessionModel, startedAt, isPinned: true }, sessionTier)
+      await lockTo($, s, lockFor(choice, sessionModel, startedAt, true), sessionTier)
       return { text: `Locked to ${choice.tier} (${choice.reason}). The next request starts with a cold prompt cache.\n${await status($, defaultTier)}` }
     } else if (arg && arg !== 'status') {
       return { text: `Unknown option "${arg}".\n${await status($, defaultTier)}` }
@@ -278,16 +302,16 @@ export const register: Register = (on, options) => {
     // startedAt only moves on /clear, so a compacted conversation keeps its lock.
     const isNewConversation = !locked || locked.startedAt !== startedAt
     if (locked && locked.sessionModel !== sessionModel) {
-      await lockTo($, s, { tier: sessionTier, reason: 'set with /model', sessionModel, startedAt, isPinned: true }, sessionTier)
+      await lockTo($, s, lockFor({ tier: sessionTier, reason: 'set with /model' }, sessionModel, startedAt, true), sessionTier)
     } else if (locked?.isPinned && isNewConversation) {
       await update($, lock, l => (l ? { ...l, startedAt } : l))
     } else if (!isNewConversation) {
       hint($, s, text, locked, defaultTier)
     } else if (!locked && (await $.session.messages()).some(m => m.role === 'assistant')) {
-      await lockTo($, s, { tier: sessionTier, reason: 'resumed session', sessionModel, startedAt }, sessionTier)
+      await lockTo($, s, lockFor({ tier: sessionTier, reason: 'resumed session' }, sessionModel, startedAt), sessionTier)
     } else {
       const choice = fit(classify(text, defaultTier) ?? { tier: defaultTier, reason: 'default' }, sessionModel)
-      await lockTo($, s, { ...choice, sessionModel, startedAt }, sessionTier)
+      await lockTo($, s, lockFor(choice, sessionModel, startedAt), sessionTier)
     }
     return next(e)
   })
@@ -345,9 +369,7 @@ export const register: Register = (on, options) => {
         await safely(async () => {
           if (!(await isLogOff($))) await closeRuns($, s, [...s.openRuns], e.isAborted ? 'interrupted' : undefined, run => (run.mode === 'fork' ? allAgentModels(s) : []))
         })
-        s.openRuns.length = 0
-        s.agentModels.clear()
-        s.pinnedSkill = undefined
+        endTurn(s)
       }
     }
   })

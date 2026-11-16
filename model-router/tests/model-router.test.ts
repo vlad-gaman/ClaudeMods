@@ -596,6 +596,7 @@ function skillWorld(top: Engine, on: On, world: World, { isWriteBroken = false }
   let now = NINE_AM
   let current: SkillCase = {}
   const files = new Map<string, string>()
+  const logged = (path: string, line: string) => files.set(path, line)
   const spend = (ms: number, usd: number) => {
     now += ms
     world.usd += usd
@@ -630,6 +631,7 @@ function skillWorld(top: Engine, on: On, world: World, { isWriteBroken = false }
     },
     complete: (isAborted = false) => top.turn.complete({ turnId: 't', answer: '', durationMs: 0, isAborted, reason: isAborted ? 'aborted' : 'answer' }),
     runs: () => [...files.values()].join('').split('\n').filter(Boolean).map(line => JSON.parse(line) as Record<string, unknown>),
+    logged,
   }
 }
 
@@ -883,6 +885,24 @@ test('a log that cannot be written never breaks the skill or the turn', async ($
   // Assert
   expect(ran.result).toMatchObject({ status: 'forked', success: true })
   expect(done.text).toBe('')
+})
+
+test('a run appended after an earlier session keeps the lines that session logged', async ($, on) => {
+  // Arrange
+  const world = fresh()
+  engine($, on, world)
+  const skills = skillWorld($, on, world)
+  await start($)
+  const logPath = /→ (.+)$/m.exec((await route($, 'status')).text ?? '')?.[1] ?? ''
+  const earlier = { at: '2026-10-27T09:00:00.000Z', skill: 'grilling', mode: 'inline', pick: 'session model', models: [SONNET], seconds: 3 }
+  skills.logged(logPath, JSON.stringify(earlier) + '\n')
+
+  // Act
+  await skills.use('sonar-status', PINNED_FORK)
+  await skills.complete()
+
+  // Assert
+  expect(skills.runs().map(r => r.skill)).toEqual(['grilling', 'sonar-status'])
 })
 
 test('a skill expanded under its plugin name is matched to the bare name the Skill call used', async ($, on) => {
