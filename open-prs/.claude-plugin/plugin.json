@@ -1,0 +1,7 @@
+{
+  "name": "open-prs",
+  "version": "0.4.0",
+  "description": "A side pane listing the repo's open GitHub or Azure DevOps PRs with their review state, comment count and pipeline runs",
+  "types": "./types/index.d.ts",
+  "lucide": "git-pull-request"
+}

@@ -1,0 +1,20 @@
+{
+  "name": "model-router",
+  "version": "0.2.0",
+  "description": "Picks haiku, sonnet or opus once per session from the first prompt and routes plain subagents to cheaper models",
+  "types": "./types/index.d.ts",
+  "lucide": "route",
+  "userConfig": {
+    "defaultModel": {
+      "type": "string",
+      "title": "Default model",
+      "description": "Model for a first prompt that matches no rule",
+      "default": "sonnet",
+      "options": [
+        "sonnet",
+        "opus",
+        "haiku"
+      ]
+    }
+  }
+}
