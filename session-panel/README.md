@@ -13,7 +13,7 @@ The terminal shows text marks instead of icons.
 
 ## Commands
 
-- `/session-panel`: open the pane (it also opens when the session starts). A pane you close by hand stays closed at later session starts until this command reopens it. Closing it another way (a plugin's close, or a reload) does not stop it opening at the next session.
+- `/session-panel`: open the pane (it also opens when the session starts). A dismissed pane stays closed at later session starts until this command reopens it. A pane closed by a plugin opens again at the next session.
 
 ## Develop
 

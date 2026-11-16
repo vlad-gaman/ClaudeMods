@@ -13,7 +13,7 @@ It reads the `origin` remote and calls `gh` (GitHub) or `az` (Azure DevOps) in t
 
 ## Commands
 
-- `/prs`: reopen the pane after closing it. A pane you close by hand stays closed through refreshes and new sessions until this command reopens it.
+- `/prs`: reopen the pane. A dismissed pane stays closed through refreshes and new sessions until this command reopens it.
 
 ## Develop
 
