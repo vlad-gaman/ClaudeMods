@@ -109,6 +109,7 @@ export function azureProvider(): Provider {
     // ADO has no comment count on the PR list: each PR costs a threads call, so counts follow the list and refresh more slowly.
     async countComments(port, remote, shown: RepoPrs, publish) {
       if (remote.host !== 'azure') throw new Error(`Azure provider given a ${remote.host} remote`)
+      const org = azureOrg(remote)
       const now = await port.now()
       const countedAt = (pr: OpenPr) => commentCounts.get(pr.url)?.at ?? -Infinity
       const due = shown.prs
@@ -121,7 +122,7 @@ export function azureProvider(): Provider {
         const results = await Promise.all(
           batch.map(pr =>
             cli<AzThreads>(port, [
-              'az', 'devops', 'invoke', '--org', azureOrg(remote), '--area', 'git', '--resource', 'pullRequestThreads',
+              'az', 'devops', 'invoke', '--org', org, '--area', 'git', '--resource', 'pullRequestThreads',
               '--route-parameters', `project=${remote.project}`, `repositoryId=${remote.name}`, `pullRequestId=${pr.number}`,
               '--api-version', '7.1', '-o', 'json', '--query', AZ_THREADS,
             ]),

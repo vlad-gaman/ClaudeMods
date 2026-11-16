@@ -21,14 +21,14 @@ It reads the `origin` remote and calls `gh` (GitHub) or `az` (Azure DevOps) in t
 claude plugin test .
 ```
 
-The hook tests in `tests/open-prs.test.tsx` run the pane, the scheduler and retry through the engine. The provider tests in `tests/providers.test.ts` call each provider through its `Port` with a stub CLI and assert the argv of every call.
+The hook tests in `tests/open-prs.test.tsx` run the pane, the scheduler and retry through the engine. The host tests in `tests/providers.test.ts` run each host module with a stub CLI in place of the engine and assert the argv of every call.
 
 Files under `hooks/`:
 
 - `register.tsx`: the hooks, the scheduler, retry and the pane.
 - `remote.ts`: reads the `origin` remote as GitHub or Azure DevOps.
-- `provider.ts`: the provider contract, the `Snapshot` (each field tri-state: unknown, none, or a value), the `Port` and the `gh`/`az` call helper.
-- `github.ts`: the GitHub provider, which runs `gh`.
-- `azure.ts`: the Azure DevOps provider, which runs `az`.
+- `provider.ts`: the contract every host module meets, the `gh`/`az` call helper, and the fetch result (a failed call keeps the last answer shown; a confirmed "none" clears it).
+- `github.ts`: the GitHub module, which runs `gh`.
+- `azure.ts`: the Azure DevOps module, which runs `az`.
 
-A third host is one more provider file and one entry in the `providers` map in `register.tsx`.
+A third host is one more module file and one entry in the `providers` map in `register.tsx`.

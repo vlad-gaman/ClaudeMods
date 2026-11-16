@@ -186,21 +186,6 @@ describe('pane', () => {
     }
   })
 
-  test('asks gh for the open PRs with their checks, the branch PR and the branch checks', async ($, on) => {
-    // Arrange
-    const { clock, callsTo } = engine(on)
-
-    // Act
-    await start($, clock)
-
-    // Assert
-    expect(callsTo('list')[0]).toEqual(
-      ['gh', 'pr', 'list', '-R', 'esendex/api', '--state', 'open', '--limit', '51', '--json', 'number,title,author,isDraft,url,reviewDecision,latestReviews,statusCheckRollup'],
-    )
-    expect(callsTo('view')[0]).toEqual(['gh', 'pr', 'view', '--json', 'number,title,state,isDraft'])
-    expect(callsTo('checks')[0]?.slice(-6)).toEqual(['-f', 'owner=esendex', '-f', 'name=api', '-f', 'ref=refs/heads/feature'])
-  })
-
   test('caps the count at 50+ and lists fifty, with their pipelines', async ($, on) => {
     // Arrange
     const many = Array.from({ length: 51 }, (_, i) => pr(i + 1, 'alice', false, [check('ci', 'SUCCESS', BUILD)]))
@@ -851,22 +836,6 @@ describe('Azure DevOps', () => {
     expect(texts).toEqual([...head(2), 'PR 7', 'Bob', REQUIRED, 'PR 8', 'Bob · draft', REQUIRED, ...NO_RUNS])
     expect(links).toEqual(['Titan Accounts/api', '#7', '#8'])
     expect(hrefs.slice(0, 2)).toEqual([`${ADO_WEB}/_git/api/pullrequests`, `${ADO_WEB}/_git/api/pullrequest/7`])
-  })
-
-  test('asks az for the active PRs, the branch PR, the runs and the repo id', async ($, on) => {
-    // Arrange
-    const { clock, callsTo } = engine(on, {}, AZURE)
-    const scope = ['--org', 'https://dev.azure.com/commify', '--project', 'Titan Accounts', '-o', 'json']
-
-    // Act
-    await start($, clock)
-
-    // Assert
-    expect(callsTo('azList')[0]?.slice(0, 16)).toEqual(['az', 'repos', 'pr', 'list', ...scope, '--repository', 'api', '--status', 'active', '--top', '51'])
-    expect(callsTo('azMine')[0]).toContain('refs/heads/feature')
-    expect(callsTo('azRuns')[0]?.slice(0, 14)).toEqual(['az', 'pipelines', 'runs', 'list', ...scope, '--top', '200', '--query-order', 'QueueTimeDesc'])
-    expect(callsTo('azRepo')[0]?.slice(0, 13)).toEqual(['az', 'repos', 'show', ...scope, '--repository', 'api', '--query', 'id'])
-    expect(callsTo('list')).toEqual([])
   })
 
   test("shows a PR's worst pipeline from each definition's latest run in this repo", async ($, on) => {

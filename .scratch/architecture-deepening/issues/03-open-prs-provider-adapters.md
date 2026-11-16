@@ -39,3 +39,20 @@ Spec written: [../../open-prs-provider-adapters/spec.md](../../open-prs-provider
 
 - `claude plugin test .` in open-prs: `122 pass`, `0 fail`, `Ran 122 tests across 2 files` (111 hook tests, 11 provider tests).
 - Type-check: TypeScript 5.9.2, `tsc -p . --noEmit` in a scratch copy with the engine types from `session-handoff/.claude-plugin/types`: exit 0.
+
+### Code review (fb1fd2a, `6efb60d...HEAD`)
+
+Standards and Spec were reviewed by two separate sub-agents. Findings fixed in this commit:
+
+- README used terms GLOSSARY.md does not define (provider, Snapshot, Port, tri-state). Rephrased in glossary terms; GLOSSARY.md was not touched (outside scope).
+- Azure base URL was built again for each thread call batch. It is now built once per count pass.
+- The two argv-assertion tests in `tests/open-prs.test.tsx` duplicated the contract tests. Removed; the contract tests now pin the argv.
+
+Findings left as they are:
+
+- The hook tests still cannot inject a stub provider, so the spec's scheduler and pane tests against a stub provider remain not done (see above).
+- Duplicated host guards (`if (remote.host !== ...) throw`) in each provider, and the duplicated draft/state mapping in `ghState`/`azState`: judgement calls, kept for clarity.
+- `ADO_BUILD` in `github.ts` recognises Azure build URLs; it is a pipeline-shape check kept in the GitHub module, which the spec's split would move. Left for ticket 04 or a follow-up.
+- Spec wording "takes the engine ... and the run state": providers take a `Port` and `FetchContext`; Azure caches live in the provider closure. The engine's `$`-passing rule forced the Port.
+
+Results after the review fixes: `claude plugin test .` in open-prs: `120 pass`, `0 fail`, `Ran 120 tests across 2 files` (109 hook tests, 11 provider tests). Type-check exit 0.
