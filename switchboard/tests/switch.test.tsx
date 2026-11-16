@@ -28,15 +28,14 @@ const setup = (on: any, calls: string[][]) => {
   on('session.start', (_: any, e: any) => ({ cwd: e.cwd }))
   on('process.run', (_: any, e: any) => {
     calls.push(e.argv)
+    if (e.argv[2] === 'list') return { value: { exitCode: 0, stdout: JSON.stringify(LIST), stderr: '' } }
+    // What `claude plugin validate --json` says the cost meter declares: command /cost and its Pane.
+    const notes = ['./register.tsx hooks: command.run{command=cost}, ui.render{component=Pane, requestId=cost-meter}']
 
-    return { value: { exitCode: 0, stdout: e.argv[2] === 'list' ? JSON.stringify(LIST) : '', stderr: '' } }
+    return { value: { exitCode: 0, stdout: JSON.stringify({ success: true, contents: [{ type: 'hooks', notes }] }), stderr: '' } }
   })
   on('fs.read', (_: any, e: any) => ({
-    value: String(e.path).endsWith('hooks.json')
-      ? '{"modules":["./register.tsx"]}'
-      : String(e.path).endsWith('plugin.json')
-        ? '{"description":"Shows running cost"}'
-        : "const PANE = 'cost-meter'; on('x'); command.register({ name: 'cost' }); $.ui.open({ id: PANE, title: 'Cost' })",
+    value: String(e.path).endsWith('plugin.json') ? '{"description":"Shows running cost"}' : undefined,
   }))
 }
 

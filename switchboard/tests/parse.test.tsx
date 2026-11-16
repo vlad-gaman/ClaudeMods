@@ -7,7 +7,11 @@ const PANE = {
   props: { title: 'Switchboard', isFocused: false, bodyColumns: 60, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
 } as const
 
-type Fake = { id: string; hooks?: string; manifest?: string; source?: string; icon?: string; throws?: boolean }
+// `notes` are what `claude plugin validate --json` says a mod's hooks module declares. `kind` picks a plugin that is
+// not a mod (skills), or one whose validate fails or gives junk.
+type Fake = { id: string; notes?: string[]; kind?: 'skills' | 'broken' | 'garbage'; manifest?: string; icon?: string }
+
+const report = (notes: string[]) => JSON.stringify({ success: true, contents: [{ file: 'hooks/hooks.json', type: 'hooks', notes }] })
 
 const withMods = (on: any, fakes: Fake[], closedPanes: string[] = []) => {
   const kept: Record<string, unknown> = {}
@@ -25,26 +29,27 @@ const withMods = (on: any, fakes: Fake[], closedPanes: string[] = []) => {
     return { value: undefined }
   })
   on('session.start', (_: any, e: any) => ({ cwd: e.cwd }))
-  on('process.run', () => ({
-    value: {
-      exitCode: 0,
-      stdout: JSON.stringify(fakes.map(f => ({ id: f.id, version: '1.0.0', enabled: true, installPath: `/x/${f.id}` }))),
-      stderr: '',
-    },
-  }))
+  on('process.run', (_: any, e: any) => {
+    if (e.argv[2] === 'list') {
+      const stdout = JSON.stringify(fakes.map(f => ({ id: f.id, version: '1.0.0', enabled: true, installPath: `/x/${f.id}` })))
+
+      return { value: { exitCode: 0, stdout, stderr: '' } }
+    }
+    const fake = fakes.find(f => String(e.argv[4]).endsWith(`/x/${f.id}`))
+    if (!fake || fake.kind === 'broken') return { value: { exitCode: 1, stdout: '', stderr: 'invalid' } }
+    if (fake.kind === 'garbage') return { value: { exitCode: 0, stdout: 'not json', stderr: '' } }
+    if (fake.kind === 'skills') return { value: { exitCode: 0, stdout: JSON.stringify({ success: true, contents: [{ type: 'plugin', notes: [] }] }), stderr: '' } }
+
+    return { value: { exitCode: 0, stdout: report(fake.notes ?? []), stderr: '' } }
+  })
   on('fs.read', (_: any, e: any) => {
     const path = String(e.path).replaceAll('\\', '/')
     const fake = fakes.find(f => path.includes(`/x/${f.id}/`))
-    if (!fake || fake.throws) return { deny: 'unreadable' }
-    if (path.endsWith('hooks/hooks.json')) return { value: fake.hooks ?? '{"modules":["./register.tsx"]}' }
-    if (path.endsWith('plugin.json')) return { value: fake.manifest ?? '{"description":"A mod"}' }
-    if (path.endsWith('icon.svg')) {
-      if (fake.icon === undefined) return { deny: 'no icon' }
+    if (!fake) return { deny: 'unreadable' }
+    if (path.endsWith('plugin.json')) return fake.manifest === undefined ? { deny: 'no manifest' } : { value: fake.manifest }
+    if (path.endsWith('icon.svg')) return fake.icon === undefined ? { deny: 'no icon' } : { value: fake.icon }
 
-      return { value: fake.icon }
-    }
-
-    return { value: fake.source ?? '' }
+    return { deny: 'unexpected read' }
   })
 }
 
@@ -56,8 +61,8 @@ const open = async ($: any, surface: 'desktop' | 'terminal') => {
 
 test('a mod shows its title, a hand-written blurb or the first nine words of its description, and its slash command', async ($, on) => {
   withMods(on, [
-    { id: 'usage-band@m', manifest: '{"description":"Long text that the blurb replaces"}', source: "command.register({ name: 'usage-band' })" },
-    { id: 'cost-meter@m', manifest: '{"description":"one two three four five six seven eight nine ten eleven"}', source: "command.register({\n  name: 'cost' })" },
+    { id: 'usage-band@m', manifest: '{"description":"Long text that the blurb replaces"}', notes: ['./register.tsx hooks: command.run{command=usage-band}'] },
+    { id: 'cost-meter@m', manifest: '{"description":"one two three four five six seven eight nine ten eleven"}', notes: ['./register.tsx hooks: command.run{command=cost}'] },
   ])
   const ui = await open($, 'terminal')
   expect(await ui.find({ type: 'Text', text: /^Usage Band$/ })).toBeTruthy()
@@ -68,51 +73,46 @@ test('a mod shows its title, a hand-written blurb or the first nine words of its
   await ui.unmount()
 })
 
-test('a command registered with double quotes, or none, shows no slash command', async ($, on) => {
-  withMods(on, [
-    { id: 'quoted@m', source: 'command.register({ name: "q" })' },
-    { id: 'plain@m', source: 'nothing here' },
-  ])
+test('a mod that declares no command shows no slash command', async ($, on) => {
+  withMods(on, [{ id: 'quiet@m', notes: ['./register.tsx hooks: session.start'] }])
   const ui = await open($, 'terminal')
-  expect(await ui.find({ type: 'Text', text: /^Quoted$/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /^Quiet$/ })).toBeTruthy()
   expect(await ui.find({ type: 'Text', text: /^\/[a-z]/ })).toBeUndefined()
   await ui.unmount()
 })
 
-test('only plugins with a hooks module are mods; unreadable ones are skipped', async ($, on) => {
+test('only plugins with a hooks module are mods; plugins that fail to validate are skipped', async ($, on) => {
   withMods(on, [
     { id: 'real@m' },
-    { id: 'skills-only@m', hooks: '{}' },
-    { id: 'empty@m', hooks: '{"modules":[]}' },
-    { id: 'broken@m', throws: true },
-    { id: 'badjson@m', hooks: 'not json' },
+    { id: 'skills-only@m', kind: 'skills' },
+    { id: 'broken@m', kind: 'broken' },
+    { id: 'badjson@m', kind: 'garbage' },
   ])
   const ui = await open($, 'terminal')
   expect(await ui.find({ type: 'Text', text: /^Real$/ })).toBeTruthy()
-  for (const name of ['Skills Only', 'Empty', 'Broken', 'Badjson']) {
+  for (const name of ['Skills Only', 'Broken', 'Badjson']) {
     expect(await ui.find({ type: 'Text', text: new RegExp(`^${name}$`) })).toBeUndefined()
   }
   await ui.unmount()
 })
 
-test('pane ids come from ui.open with a single-quoted, double-quoted or const id; an unresolved const is dropped', async ($, on) => {
+test('the eye closes each pane a mod renders, once, and nothing for a mod that renders none', async ($, on) => {
   const closedPanes: string[] = []
   withMods(
     on,
     [
-    {
-      id: 'multi@m',
-      source: `const PANE = 'from-const'
-        $.ui.open({ id: 'single' }); $.ui.open({ id: "double" }); $.ui.open({ id: PANE }); $.ui.open({ id: PANE }); $.ui.open({ id: MISSING })`,
-    },
-    { id: 'none@m', source: 'nothing' },
+      {
+        id: 'multi@m',
+        notes: ['./register.tsx hooks: ui.render{component=Pane, requestId=single}, ui.render{component=Pane, requestId=double}, ui.render{component=AbovePrompt}, ui.render{component=Pane, requestId=single}'],
+      },
+      { id: 'none@m', notes: ['./register.tsx hooks: session.start'] },
     ],
     closedPanes,
   )
   const ui = await open($, 'terminal')
   expect(await ui.find({ key: 'hide-none@m' })).toBeUndefined()
   await ui.press({ key: 'hide-multi@m' })
-  expect(closedPanes).toEqual(['single', 'double', 'from-const'])
+  expect(closedPanes).toEqual(['single', 'double'])
   await ui.unmount()
 })
 

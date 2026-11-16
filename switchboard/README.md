@@ -18,7 +18,7 @@ A mod here is an installed plugin with a hooks module. Plugins with only subagen
 
 ## How it finds a mod's command and panes
 
-Switchboard reads each mod's `hooks/register.tsx` as text. Because of that, `command.register`, `ui.open` and `PANE` must stay literal in every other mod's `register.tsx`: a single-quoted `name:` in `command.register({ name: '…' })`, and `ui.open({ id: … })` with a quoted id or a `const` the id names. Move them behind a helper and the mod loses its slash command and its eye in the panel.
+Switchboard asks the engine, not the mod's source. For each installed plugin it runs `claude plugin validate --json <folder>`, which reports what the plugin's hooks module declares: the slash command it registers (`command.run`) and the panes it opens (`ui.render` with `component=Pane`). A plugin with no hooks module is not a mod. Nothing in another mod needs a particular layout or spelling, so reformatting its `register.tsx` does not drop it from the panel. A plugin whose validate fails is left out.
 
 ## Develop
 
@@ -26,4 +26,4 @@ Switchboard reads each mod's `hooks/register.tsx` as text. Because of that, `com
 claude plugin test .
 ```
 
-Tests are in `tests/`: how mods are read and shown (`parse.test.tsx`), the switch and the eye (`switch.test.tsx`), the source readers (`source.test.ts`) and the name and icon picks (`names.test.ts`). The tables are in `hooks/data.ts`, the readers in `hooks/source.ts` and `hooks/names.ts`, the panel drawing in `hooks/view.tsx`, and the hooks and state in `hooks/register.tsx`.
+Tests are in `tests/`: the mod list and what each mod declares (`manifest.test.ts`, with in-memory ports and no engine), how mods are shown (`parse.test.tsx`), the switch and the eye (`switch.test.tsx`), the names and icon picks (`names.test.ts`), and a session starting (`start.test.tsx`). The tables are in `hooks/data.ts`, the listing in `hooks/manifest.ts`, the name and icon picks in `hooks/names.ts`, the panel drawing in `hooks/view.tsx`, and the hooks and state in `hooks/register.tsx`.

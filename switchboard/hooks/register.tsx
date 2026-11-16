@@ -3,8 +3,8 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Mod } from '../types'
 import { BLURBS } from './data'
+import { listMods } from './manifest'
 import { nameOf, titleOf, words } from './names'
-import { commandNameOf, panesOf } from './source'
 import { pane } from './view'
 
 const PANE = 'switchboard'
@@ -16,38 +16,26 @@ const closed = atom({ plugin: 'switchboard', key: 'closed' } as const, [], { sha
 const note = atom({ plugin: 'switchboard', key: 'note' } as const, '', { shape: 'note-1' })
 
 const refresh = async ($: EngineInterface) => {
-  const ran = await $.process.run(['claude', 'plugin', 'list', '--json'])
-  if (ran.exitCode !== 0) {
-    await update($, note, () => `List failed: ${ran.stderr.slice(0, 120)}`)
+  const listed = await listMods(
+    argv => $.process.run(argv, { timeoutMs: 60_000 }).catch(err => ({ exitCode: 1, stdout: '', stderr: String(err) })),
+    path => $.fs.read(path).then(text => (typeof text === 'string' ? text : undefined), () => undefined),
+  )
+  if ('error' in listed) {
+    await update($, note, () => listed.error)
 
     return
   }
-  const plugins = JSON.parse(ran.stdout) as { id: string; version: string; enabled: boolean; installPath: string }[]
-  // A mod is a plugin with a hooks module; skip subagent/skill-only plugins.
-  const found = await Promise.all(
-    plugins.map(async p => {
-      try {
-        const hooks = JSON.parse((await $.fs.read(`${p.installPath}/hooks/hooks.json`)) as string) as { modules?: string[] }
-        if (!hooks.modules?.length) return undefined
-        const manifest = JSON.parse((await $.fs.read(`${p.installPath}/.claude-plugin/plugin.json`)) as string) as { description?: string; lucide?: string; icon?: string }
-        const source = (await $.fs.read(`${p.installPath}/hooks/${hooks.modules[0]}`)) as string
-        const command = commandNameOf(source)
-        const lucide = manifest.lucide ?? manifest.icon
-        const panes = panesOf(source)
-        const iconSvg = await $.fs.read(`${p.installPath}/icon.svg`).then(t => (typeof t === 'string' && t.includes('<svg') ? t : undefined), () => undefined)
-        const desc = BLURBS[nameOf(p.id)] ?? words(manifest.description ?? '')
-
-        return { ...p, desc, command, lucide, iconSvg, panes }
-      } catch {
-        return undefined
-      }
-    }),
-  )
   await update($, mods, () =>
-    found
-      .filter((p): p is NonNullable<typeof p> => p !== undefined)
-      .map(p => ({ id: p.id, version: p.version, isEnabled: p.enabled, desc: p.desc, command: p.command, lucide: p.lucide, iconSvg: p.iconSvg, panes: p.panes }))
-      .sort((a, b) => a.id.localeCompare(b.id)),
+    listed.mods.map(m => ({
+      id: m.id,
+      version: m.version,
+      isEnabled: m.isEnabled,
+      desc: BLURBS[nameOf(m.id)] ?? words(m.description),
+      command: m.command,
+      lucide: m.lucide,
+      iconSvg: m.iconSvg,
+      panes: m.panes,
+    })),
   )
 }
 
