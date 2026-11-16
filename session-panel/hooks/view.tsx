@@ -169,7 +169,7 @@ export const pane = (parts: Parts, Svg: SvgPart | undefined, s: Session) => {
                 fallback={<Text>⇄</Text>}
               />
             }
-            title={connTitle(c.server)}
+            title={s.icons.find(i => i.server === c.server)?.name ?? connTitle(c.server)}
             right={times(c.count)}
             sub={c.tool ?? `mcp__${c.server}__*`}
           />

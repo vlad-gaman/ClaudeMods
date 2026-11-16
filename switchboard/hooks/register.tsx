@@ -82,7 +82,6 @@ const toggleEnabled = async ($: EngineInterface, mod: Mod) => {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'switchboard', description: 'Open the switchboard: turn mods on or off' })
-    void $.ui.open({ id: PANE, title: 'Switchboard' })
     void refresh($)
 
     return next(e)
