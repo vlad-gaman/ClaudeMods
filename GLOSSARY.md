@@ -13,12 +13,12 @@ The words the code uses. Use these terms in names, comments, issues and replies.
 
 ## Interface
 
-- **Pane**: a docked panel a mod opens with `$.ui.open({ id })`. Session Panel and Switchboard each draw one.
+- **Pane**: a docked panel a mod opens with `$.ui.open({ id })`. Session Panel, Switchboard and Open PRs each draw one.
 - **Band**: a block drawn above the prompt (`AbovePrompt`). Usage Band, Session Handoff and Brain Dump draw bands. Each passes control on so other mods' bands also draw.
 - **Status line**: where Usage Band puts its figures on surfaces with no band (VS Code, mobile).
 - **Surface**: where the session is shown: `desktop`, `vscode`, `mobile`.
 - **Toast**: a short message from `$.ui.toast`.
-- **Slash command**: a command a mod registers with `$.command.register` (`/switchboard`, `/session-panel`, `/usage-band`, `/handoff-session`, `/brain-dump`).
+- **Slash command**: a command a mod registers with `$.command.register` (`/switchboard`, `/session-panel`, `/usage-band`, `/handoff-session`, `/brain-dump`, `/prs`, `/route`).
 - **Switch** (Switchboard): the control that enables or disables a mod.
 - **Note** (Switchboard): the one-line message shown after the last action.
 - **Eye** (Switchboard): the control that closes or reopens a mod's pane without disabling the mod.
@@ -40,3 +40,20 @@ The words the code uses. Use these terms in names, comments, issues and replies.
 - **Interrogation** (Brain Dump): the questions asked, one at a time, about points in a dump that conflict, are unclear or are missing and costly to guess.
 - **Structured prompt** (Brain Dump): the one prompt built from the dump and the answers (Goal, Context, Task, Constraints, Done when, Decisions, Assumptions). It is sent only when the owner types `go`.
 - **Pending dump** (Brain Dump): the dump and its structured prompt, kept in `$.store` per session until `go`, `cancel` or 24 hours pass.
+
+## Open PRs
+
+- **Branch PR**: the open PR for the current branch, marked in the pane.
+- **Run**: a pipeline run (GitHub check or Azure pipeline) shown with its state.
+
+## Model Router
+
+- **Tier**: `haiku`, `sonnet` or `opus`.
+- **Lock**: the tier chosen once for the session from the first prompt. **Pinned** when set with `/route <tier>`, so prompts never raise it.
+- **Skill log**: the per-run record of a skill's models, time and cost.
+
+## Agent Pipeline
+
+- **Pipeline**: one ticket taken through tester, implementer, reviewer and documenter to a draft PR.
+- **Run flag**: set by `pipeline_begin` and cleared by `pipeline_end`; while set, Jira and Confluence writes are refused.
+- **Role**: one of `implementer`, `tester`, `documenter`, `reviewer`.

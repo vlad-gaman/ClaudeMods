@@ -1,10 +1,13 @@
 # ClaudeMods
 
-Five mods for Claude Code. A mod is a plugin with a hooks module (see [GLOSSARY.md](GLOSSARY.md)). Mods need Claude Code 2.1.287 or later.
+Eight mods for Claude Code. A mod is a plugin with a hooks module (see [GLOSSARY.md](GLOSSARY.md)). Mods need Claude Code 2.1.287 or later.
 
 | Mod | What it does |
 | --- | --- |
+| [agent-pipeline](agent-pipeline/README.md) | Runs a vault ticket through test-first implementation, review and docs to a draft PR, with four subagents. |
 | [brain-dump](brain-dump/README.md) | Turns a long, unstructured prompt into one structured prompt: it asks about points that conflict or are unclear, then runs the result only after you type go. |
+| [model-router](model-router/README.md) | Picks haiku, sonnet or opus once per session from the first prompt and routes plain subagents to cheaper models. |
+| [open-prs](open-prs/README.md) | A side pane listing the repo's open GitHub or Azure DevOps PRs with their review state, comment count and pipeline runs. |
 | [session-handoff](session-handoff/README.md) | Writes a handoff file for the current session, so a new chat can pick it up. |
 | [session-panel](session-panel/README.md) | A pane showing this session's connectors, skills, context files and to-do list. |
 | [switchboard](switchboard/README.md) | A side panel to switch each mod and plugin on or off. |
