@@ -14,6 +14,8 @@ const skills = atom({ plugin: 'session-panel', key: 'skills' } as const, [] as S
 const contextFiles = atom({ plugin: 'session-panel', key: 'files' } as const, [] as FileRow[], { shape: 'files-1' })
 const title = atom({ plugin: 'session-panel', key: 'title' } as const, '', { shape: 'title-1' })
 const todos = atom({ plugin: 'session-panel', key: 'todos' } as const, [] as Todo[], { shape: 'todos-1' })
+// Set when the person closes the pane by hand; a session start then leaves it closed until /session-panel.
+const isDismissed = atom({ plugin: 'session-panel', key: 'dismissed' } as const, false, { shape: 'dismissed-1' })
 
 // Brand icon for a connector, fetched once from Simple Icons by its display name (Gmail -> "gmail").
 // Only the path data is kept and redrawn in black or white; no match leaves the Lucide icon.
@@ -115,15 +117,22 @@ export const register: Register = on => {
       name: 'session-panel',
       description: 'Show connectors, skills, context files and to-dos of this session',
     })
-    void $.ui.open({ id: PANE, title: 'Session' })
+    if (!(await read($, isDismissed))) void $.ui.open({ id: PANE, title: 'Session' })
     void refresh($)
     return next(e)
   })
 
   on('command.run', { command: 'session-panel' }, async $ => {
+    await update($, isDismissed, () => false)
     await $.ui.open({ id: PANE, title: 'Session' })
     await refresh($)
     return { text: 'Session panel opened.' }
+  })
+
+  on('ui.close', { id: PANE }, async ($, e, next) => {
+    const closed = await next(e)
+    if (e.origin.kind === 'person') await update($, isDismissed, () => true)
+    return closed
   })
 
   on('prompt.submit', async ($, e, next) => {

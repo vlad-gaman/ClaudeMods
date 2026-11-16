@@ -13,7 +13,7 @@ It reads the `origin` remote and calls `gh` (GitHub) or `az` (Azure DevOps) in t
 
 ## Commands
 
-- `/prs`: reopen the pane after closing it.
+- `/prs`: reopen the pane after closing it. A pane you close by hand stays closed through refreshes and new sessions until this command reopens it.
 
 ## Develop
 
@@ -21,7 +21,7 @@ It reads the `origin` remote and calls `gh` (GitHub) or `az` (Azure DevOps) in t
 claude plugin test .
 ```
 
-The hook tests in `tests/open-prs.test.tsx` run the pane, the scheduler and retry through the engine. The host tests in `tests/providers.test.ts` run each host module with a stub CLI in place of the engine and assert the argv of every call.
+The hook tests in `tests/open-prs.test.tsx` run the pane, the scheduler and retry through the engine. `tests/lifecycle.test.tsx` runs open, close and reopen against the fake engine in `tests/pane-lifecycle-engine.ts` (the canonical copy is `docs/fixtures/pane-lifecycle-engine.ts`); it cannot raise the person's close, so the dismissal that close records is not covered by a test. The host tests in `tests/providers.test.ts` run each host module with a stub CLI in place of the engine and assert the argv of every call.
 
 Files under `hooks/`:
 

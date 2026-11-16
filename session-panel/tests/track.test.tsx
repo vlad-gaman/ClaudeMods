@@ -1,4 +1,4 @@
-import { expect, test } from 'claude-code/testing'
+import { expect, mock, test } from 'claude-code/testing'
 
 const PANE = {
   plugin: 'session-panel',
@@ -43,12 +43,13 @@ test('a connector called through its MCP tool is listed', async ($, on) => {
 
 test('a connector keyed by an id is titled with the name the engine lists it under', async ($, on) => {
   const id = '0123abcd-4567-89ab-cdef-000000000000'
+  const clock = mock.clock(on, { now: 0 })
   engine(on, undefined, {
     context: { breakdown: { memoryFiles: [], mcpTools: [{ name: `mcp__${id}__send`, serverName: 'claude.ai Fathom' }] } },
   })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.tool.call({ tool: `mcp__${id}__send` } as any)
-  await new Promise(r => setTimeout(r, 50)) // the name is read in the background
+  await clock.settle() // the name is read in the background
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Text', text: /^Fathom$/ }))?.text).toBe('Fathom')

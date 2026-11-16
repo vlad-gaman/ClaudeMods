@@ -14,6 +14,7 @@ declare module 'claude-code' {
       files: Shaped<FileRow[]>
       todos: Shaped<Todo[]>
       title: Shaped<string>
+      dismissed: Shaped<boolean>
     }
   }
 }

@@ -13,7 +13,7 @@ The terminal shows text marks instead of icons.
 
 ## Commands
 
-- `/session-panel`: open the pane (it also opens when the session starts).
+- `/session-panel`: open the pane (it also opens when the session starts). A pane you close by hand stays closed at later session starts until this command reopens it. Closing it another way (a plugin's close, or a reload) does not stop it opening at the next session.
 
 ## Develop
 
@@ -21,4 +21,4 @@ The terminal shows text marks instead of icons.
 claude plugin test .
 ```
 
-Tests are in `tests/`: what the pane lists, through the hook (`track.test.tsx`, `parse.test.tsx`), the to-do rules (`todos.test.ts`) and the name, icon and parsing helpers (`names.test.ts`). The tables are in `hooks/data.ts`, the helpers in `hooks/names.ts`, the to-do rules in `hooks/todos.ts`, the pane drawing in `hooks/view.tsx`, and the hooks and state in `hooks/register.tsx`.
+Tests are in `tests/`: what the pane lists, through the hook (`track.test.tsx`, `parse.test.tsx`), the to-do rules (`todos.test.ts`), the name, icon and parsing helpers (`names.test.ts`), and the pane lifecycle (`lifecycle.test.tsx`, with the fake engine copied in `pane-lifecycle-engine.ts`; the canonical copy is `docs/fixtures/pane-lifecycle-engine.ts`). The lifecycle test cannot raise the person's close, so the dismissal it records is not covered by a test. The tables are in `hooks/data.ts`, the helpers in `hooks/names.ts`, the to-do rules in `hooks/todos.ts`, the pane drawing in `hooks/view.tsx`, and the hooks and state in `hooks/register.tsx`.

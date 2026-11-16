@@ -23,6 +23,14 @@ The words the code uses. Use these terms in names, comments, issues and replies.
 - **Note** (Switchboard): the one-line message shown after the last action.
 - **Eye** (Switchboard): the control that closes or reopens a mod's pane without disabling the mod.
 
+## Pane lifecycle
+
+- **Placed**: a pane the surface has drawn. An open answers `isPlaced: true`; an open that waits undrawn (`isPlaced: false`) is open but not placed. Switchboard's eye treats a placed pane as open.
+- **Closed on unload**: a pane the engine dropped because its plugin unloaded (close origin `unload`). Not a dismissal: the mod opens its pane again at its next session. _Avoid_: dismissed.
+- **Dismissed**: a pane the person closed by hand (close origin `person`: the close mark or ctrl+x x). A mod keeps a dismissed pane closed: no open at a session start, a refresh or a turn, across reloads, until its command reopens it. The mod saves the dismissal in its own atom. _Avoid_: hidden, collapsed.
+- **Closed by a plugin**: a pane a plugin closed with `$.ui.close` (close origin `plugin`, such as the eye). Not a dismissal: the mod opens it again at its next session.
+- **Reopen by command**: the mod's slash command clears its dismissed state and opens the pane, placed or not.
+
 ## Session
 
 - **Session**: one run of Claude Code. Also called the **chat** in Usage Band.
