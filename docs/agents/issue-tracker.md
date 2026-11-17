@@ -1,30 +1,34 @@
-# Issue tracker: Local Markdown
+# Issue tracker: GitHub
 
-Issues and specs for this repo live as markdown files in `.scratch/`.
+Issues for this repo live in GitHub Issues: https://github.com/vlad-gaman/ClaudeMods/issues. Use the `gh` CLI (run it inside the clone, so it picks the repo from `origin`).
 
 ## Conventions
 
-- One feature per directory: `.scratch/<feature-slug>/`
-- The spec is `.scratch/<feature-slug>/spec.md`
-- Implementation issues are one file per ticket at `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01`, never a single combined tickets file
-- Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
-- Comments and conversation history append to the bottom of the file under a `## Comments` heading
+- One ticket is one GitHub issue. Its body holds the problem or question, the goal, and a "Done when" list.
+- Triage state is a label (see `triage-labels.md` for the role strings). A resolved ticket is a closed issue, with the answer in its last comment.
+- A ticket's type (`research`, `prototype`, `grilling`, `task`) is a `Type:` line at the top of the body.
+- A blocker is a `Blocked by: #12, #15` line near the top of the body. A ticket is unblocked when every issue it lists is closed.
+- Specs and maps are still files, `.scratch/<feature-slug>/spec.md` and `map.md`, because they are long and reviewed with the code. An issue links its spec by repo path.
+- The tickets written before 2026-11-17 were migrated from `.scratch/<feature>/issues/`. Those files stay as history; each migrated issue ends with a "Migrated from" line naming its file. New tickets are created only as GitHub issues.
 
 ## When a skill says "publish to the issue tracker"
 
-Create a new file under `.scratch/<feature-slug>/` (creating the directory if needed).
+Create a GitHub issue: `gh issue create --title "<title>" --body-file <file> --label <label>`. Write the body to a scratch file first, so multi-line text is not squeezed through a shell string.
 
 ## When a skill says "fetch the relevant ticket"
 
-Read the file at the referenced path. The user will normally pass the path or the issue number directly.
+`gh issue view <number> --comments`. The user will normally pass the number or the URL.
+
+## Comments and resolving
+
+Append conversation with `gh issue comment <number> --body-file <file>`. To resolve a ticket, comment the answer, then `gh issue close <number> --reason completed` (or `--reason "not planned"` for `wontfix`).
 
 ## Wayfinding operations
 
-Used by `/wayfinder`. The **map** is a file with one **child** file per ticket.
+Used by `/wayfinder`. The **map** is still the file `.scratch/<effort>/map.md` (Notes / Decisions-so-far / Fog); its **children** are GitHub issues.
 
-- **Map**: `.scratch/<effort>/map.md` (the Notes / Decisions-so-far / Fog body).
-- **Child ticket**: `.scratch/<effort>/issues/NN-<slug>.md`, numbered from `01`, with the question in the body. A `Type:` line records the ticket type (`research`/`prototype`/`grilling`/`task`); a `Status:` line records `claimed`/`resolved`.
-- **Blocking**: a `Blocked by: NN, NN` line near the top. A ticket is unblocked when every file it lists is `resolved`.
-- **Frontier**: scan `.scratch/<effort>/issues/` for files that are open, unblocked, and unclaimed; first by number wins.
-- **Claim**: set `Status: claimed` and save before any work.
-- **Resolve**: append the answer under an `## Answer` heading, set `Status: resolved`, then append a context pointer (gist + link) to the map's Decisions-so-far in `map.md`.
+- **Child ticket**: a GitHub issue whose body holds the question, with `Type:` and `Blocked by:` lines.
+- **Blocking**: `Blocked by: #N, #N` in the body. Unblocked when each listed issue is closed.
+- **Frontier**: `gh issue list --state open`, then the open issues with no open blockers and no assignee; lowest number first.
+- **Claim**: assign yourself (`gh issue edit <number> --add-assignee @me`) before any work.
+- **Resolve**: comment the answer, close the issue, then append a context pointer (gist + issue link) to the map's Decisions-so-far.

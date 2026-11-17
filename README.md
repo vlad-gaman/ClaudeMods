@@ -72,3 +72,11 @@ A change to a mod is done when its tests pass and `tsc` reports zero errors.
 ## Docs rule
 
 Change a README in the same commit as the behaviour it describes. Each README's first sentence matches its `plugin.json` description, and READMEs use the terms in [GLOSSARY.md](GLOSSARY.md).
+
+## Releases
+
+A push to `main` releases every mod whose files changed. Each release is tagged `<mod>-v<version>`, takes the version from the mod's `.claude-plugin/plugin.json`, and attaches a zip of the mod (tracked files, without `tests/`). A mod that changed without a version bump has its tag already, so it is skipped with a warning in the run summary: bump the version to release it.
+
+To release every mod whose current version has no release yet (the first time, or after a missed run), run the **Release mods** workflow by hand with `all` ticked. The workflow is `.github/workflows/release.yml`; the logic is `.github/scripts/release.sh`, which `DRY_RUN=1` runs without creating anything.
+
+To use a release: unzip it and load the folder with `claude --plugin-dir ./<mod>`.

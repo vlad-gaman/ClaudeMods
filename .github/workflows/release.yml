@@ -1,0 +1,33 @@
+name: Release mods
+
+# On every push to main, each mod whose files changed gets a GitHub release with a zip of the mod, tagged
+# <mod>-v<version> from its .claude-plugin/plugin.json. Bump the version in a mod's plugin.json to release a change.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      all:
+        description: Release every mod whose current version has no release yet
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Release changed mods
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ALL: ${{ inputs.all && '1' || '' }}
+        run: bash .github/scripts/release.sh "${{ github.event.before }}" "${{ github.sha }}"
