@@ -232,7 +232,7 @@ function toggle($: EngineInterface, id: string) {
   return update($, collapsed, ids => (ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]))
 }
 
-const STATUS_ICON: Partial<Record<string, IconName>> = { changes: 'changes', required: 'required', approved: 'approved', draft: 'draft', none: 'branch' }
+const STATUS_ICON: Partial<Record<string, IconName>> = { changes: 'changes', required: 'required', approved: 'approved', draft: 'draft', none: 'branch', merged: 'merged', closed: 'changes' }
 
 const RULE = '─'.repeat(30)
 
@@ -317,7 +317,7 @@ export const register: Register = on => {
       </Box>
     )
     const cardHead = (id: string, title: string, meta: string) => (
-      <Box flexDirection="row" columnGap={1}>
+      <Box flexDirection="row" columnGap={1} justifyContent={Svg ? 'space-between' : undefined}>
         <Button key={`card-${id}`} plain label={`${isFolded(id) ? '▸' : '▾'} ${title}`} onPress={() => void toggle($, id)} />
         <Text dimColor>{meta}</Text>
       </Box>
@@ -362,7 +362,34 @@ export const register: Register = on => {
           ))}
         </Box>
       )
-    const branchRow = (row: SessionRow) => (
+    const branchRow = (row: SessionRow) =>
+      Svg ? (
+        <Box key={`branch-${row.branch}`} flexDirection="column">
+          <Box flexDirection="row" justifyContent="space-between" columnGap={1}>
+            <Box flexDirection="column">
+              <Box flexDirection="row" columnGap={1}>
+                {row.pr ? row.pr.url ? <Link href={row.pr.url} label={`#${row.pr.number}`} /> : <Text color="suggestion">{`#${row.pr.number}`}</Text> : null}
+                <Text bold>{row.pr ? row.pr.title : row.branch}</Text>
+              </Box>
+              <Box flexDirection="row" columnGap={1}>
+                <Text dimColor>{row.pr ? row.branch : ''}</Text>
+                {row.path ? <Text dimColor>{row.path}</Text> : <Text color="warning">no worktree</Text>}
+              </Box>
+            </Box>
+            <Box flexDirection="column" alignItems="flex-end">
+              {lead('status', STATUS_ICON[row.pr?.status ?? 'none'] ?? null, TONE[row.pr?.status ?? 'none'], statusLine(row.pr?.status ?? 'none'), statusLabel(row.pr?.status ?? 'none'))}
+              {row.threads ? lead('unresolved', 'message', 'warning', unresolvedText(row.threads) ?? '', unresolvedLabel(row.threads) ?? '') : null}
+            </Box>
+          </Box>
+          {chips(row.runs)}
+          {row.threads ? (
+            <Box flexDirection="row" columnGap={1}>
+              <Text color={row.threads.resolved === row.threads.total ? 'success' : 'warning'}>{bar(row.threads.resolved, row.threads.total)}</Text>
+              <Text dimColor>{`${row.threads.resolved}/${row.threads.total} resolved`}</Text>
+            </Box>
+          ) : null}
+        </Box>
+      ) : (
       <Box key={`branch-${row.branch}`} flexDirection="column">
         {row.pr ? (
           <Box flexDirection="row" columnGap={1}>
@@ -376,12 +403,12 @@ export const register: Register = on => {
         {threadBlock(row.threads)}
         {chips(row.runs)}
       </Box>
-    )
+      )
     const prRow = (pr: OpenPr) => (
       <Box key={`pr-${pr.number}`} flexDirection="column">
         <Box flexDirection="row" columnGap={1}>
           <Link href={pr.url} label={`#${pr.number}`} />
-          <Text>{pr.title}</Text>
+          <Text bold={Boolean(Svg)}>{pr.title}</Text>
         </Box>
         <Text dimColor>{pr.comments === null ? pr.author : `${pr.author} · ${noun(pr.comments, 'comment', 'comments')}`}</Text>
         {threadBlock(pr.threads)}

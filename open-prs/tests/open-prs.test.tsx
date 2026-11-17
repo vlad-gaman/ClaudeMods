@@ -1350,6 +1350,22 @@ describe('cards', () => {
     expect(texts.some(text => text.includes('⎇'))).toBe(false)
   })
 
+  test('the desktop card puts the title in bold and the status and unresolved count on the right', async ($, on) => {
+    // Arrange
+    const { clock } = engine(on, { view: () => fail(NO_PR), worktrees: () => raw(PORCELAIN) })
+    await start($, clock)
+
+    // Act
+    const ui = await mountPane($, 'desktop')
+    const bold = (await ui.findAll({ type: 'Text' })).filter(text => text.props.bold)
+    const rows = (await ui.findAll({ type: 'Box' })).filter(box => box.props.justifyContent === 'space-between')
+    await ui.unmount()
+
+    // Assert
+    expect(bold.map(text => text.text)).toContain('feature')
+    expect(rows.length).toBeGreaterThan(1)
+  })
+
   test('the terminal keeps glyphs and draws no Svg', async ($, on) => {
     // Arrange
     const { clock } = engine(on, { view: () => fail(NO_PR) })
