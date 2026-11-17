@@ -402,10 +402,10 @@ export const register: Register = on => {
       ) : null
     const chips = (runs: Run[]) =>
       runs.length === 0 ? null : (
-        <Box flexDirection="row" columnGap={1}>
+        <Box flexDirection="row" columnGap={1} flexWrap={Svg ? 'wrap' : undefined} alignItems={Svg ? 'flex-start' : undefined}>
           {runs.map((run, i) => (
             Svg ? (
-              <Box key={`run-${i}`} borderStyle="round" borderColor={RUN_TONE[run.state]} paddingX={1}>
+              <Box key={`run-${i}`} borderStyle="round" borderColor={RUN_TONE[run.state]} alignSelf="flex-start" flexGrow={0} flexShrink={0}>
                 {lead(`run-${i}`, run.state, RUN_TONE[run.state], `${RUN_GLYPH[run.state]} ${run.name}`, run.name)}
               </Box>
             ) : (
