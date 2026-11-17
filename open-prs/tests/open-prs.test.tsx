@@ -1366,6 +1366,22 @@ describe('cards', () => {
     expect(rows.length).toBeGreaterThan(1)
   })
 
+  test('the desktop draws the status and thread bars as SVG, with no block characters', async ($, on) => {
+    // Arrange
+    const { clock } = engine(on, { view: () => fail(NO_PR), worktrees: () => raw(PORCELAIN), threads: threaded })
+    await start($, clock)
+
+    // Act
+    const ui = await mountPane($, 'desktop')
+    const alts = (await ui.findAll({ type: 'Svg' })).map(icon => icon.props.alt)
+    const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+    await ui.unmount()
+
+    // Assert
+    expect(alts).toContain('status bar')
+    expect(texts.some(text => /[█░▒]/.test(text))).toBe(false)
+  })
+
   test('the terminal keeps glyphs and draws no Svg', async ($, on) => {
     // Arrange
     const { clock } = engine(on, { view: () => fail(NO_PR) })

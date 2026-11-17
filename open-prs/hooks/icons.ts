@@ -31,3 +31,31 @@ export const HEX: Record<string, string> = {
 /** One icon as an SVG document, stroked in a tone. */
 export const iconSvg = (name: IconName, tone: string) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${HEX[tone] ?? HEX.inactive}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${PATHS[name]}</svg>`
+
+const W = 320
+const TRACK = '#374151'
+
+/** The status bar: one rounded segment per status in its tone, the no-PR one striped. `parts` are widths in any unit. */
+export const statusBarSvg = (parts: { tone: string; width: number; isStriped: boolean }[]) => {
+  const total = parts.reduce((sum, part) => sum + part.width, 0) || 1
+  const gap = 3
+  const usable = W - gap * Math.max(0, parts.length - 1)
+  let x = 0
+  const rects = parts.map(part => {
+    const w = (part.width / total) * usable
+    const colour = HEX[part.tone] ?? HEX.inactive
+    const rect = part.isStriped
+      ? `<rect x="${x}" y="0" width="${w}" height="8" rx="3" fill="url(#stripes)" stroke="${colour}" stroke-width="1"/>`
+      : `<rect x="${x}" y="0" width="${w}" height="8" rx="3" fill="${colour}"/>`
+    x += w + gap
+    return rect
+  })
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="8" viewBox="0 0 ${W} 8"><defs><pattern id="stripes" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="6" fill="${HEX.inactive}"/></pattern></defs>${rects.join('')}</svg>`
+}
+
+/** A thin progress bar: a track, filled by the share of `done` in `total`, in a tone. */
+export const progressSvg = (done: number, total: number, tone: string) => {
+  const w = 120
+  const filled = total > 0 ? (done / total) * w : 0
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="6" viewBox="0 0 ${w} 6"><rect width="${w}" height="6" rx="3" fill="${TRACK}"/>${filled > 0 ? `<rect width="${filled}" height="6" rx="3" fill="${HEX[tone] ?? HEX.inactive}"/>` : ''}</svg>`
+}

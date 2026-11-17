@@ -5,7 +5,7 @@ import { azureProvider } from './azure'
 import { githubProvider } from './github'
 import { LIMIT, type Port, type Provider, type SessionBranch, type Snapshot, worst } from './provider'
 import { type Remote, remoteOf } from './remote'
-import { type IconName, iconSvg } from './icons'
+import { type IconName, iconSvg, progressSvg, statusBarSvg } from './icons'
 import { listWorktrees, sessionBranchesOf } from './worktrees'
 import { type CliFailure, failureOf, thrownFailureOf, withFailure } from './cli-log'
 import {
@@ -322,15 +322,38 @@ export const register: Register = on => {
         <Text dimColor>{meta}</Text>
       </Box>
     )
-    const statusRow = (items: Counted[]) => (
-      <Box flexDirection="row">
-        {statusBar(statusCounts(items), STATUS_WIDTH).map(segment => (
-          <Text key={`segment-${segment.key}`} color={TONE[segment.key]}>
-            {(segment.key === 'none' ? '▒' : '█').repeat(segment.width)}
-          </Text>
-        ))}
-      </Box>
-    )
+    const statusRow = (items: Counted[]) =>
+      Svg ? (
+        <Svg
+          key="status-bar"
+          source={statusBarSvg(statusBar(statusCounts(items), STATUS_WIDTH).map(segment => ({ tone: TONE[segment.key], width: segment.width, isStriped: segment.key === 'none' })))}
+          alt="status bar"
+          width={320}
+          height={8}
+        />
+      ) : (
+        <Box flexDirection="row">
+          {statusBar(statusCounts(items), STATUS_WIDTH).map(segment => (
+            <Text key={`segment-${segment.key}`} color={TONE[segment.key]}>
+              {(segment.key === 'none' ? '▒' : '█').repeat(segment.width)}
+            </Text>
+          ))}
+        </Box>
+      )
+    const progressRow = (name: string, done: number, total: number, tone: string, text: string) =>
+      Svg ? (
+        <Box key={`progress-${name}`} flexDirection="row" columnGap={1}>
+          <Text dimColor>{name}</Text>
+          <Svg source={progressSvg(done, total, tone)} alt={`${name} progress`} width={120} height={6} />
+          <Text dimColor>{text}</Text>
+        </Box>
+      ) : (
+        <Text key={`progress-${name}`}>{text}</Text>
+      )
+    const summary = (name: 'threads' | 'ci', totals: { resolved: number; total: number } | { ok: number; total: number }) => {
+      const done = 'ok' in totals ? totals.ok : totals.resolved
+      return Svg ? progressRow(name, done, totals.total, done === totals.total && totals.total > 0 ? 'success' : 'warning', `${done}/${totals.total}`) : <Text>{name === 'ci' ? ciSummary({ ok: done, total: totals.total }) : threadSummary({ resolved: done, total: totals.total })}</Text>
+    }
     const legendRow = (items: Counted[]) => (
       <Box flexDirection="row" columnGap={1}>
         {statusCounts(items).map(count =>
@@ -342,7 +365,11 @@ export const register: Register = on => {
       threads ? (
         <Box flexDirection="column">
           <Box flexDirection="row" columnGap={1}>
-            <Text color={threads.resolved === threads.total ? 'success' : 'warning'}>{bar(threads.resolved, threads.total)}</Text>
+            {Svg ? (
+              <Svg source={progressSvg(threads.resolved, threads.total, threads.resolved === threads.total ? 'success' : 'warning')} alt="threads progress" width={120} height={6} />
+            ) : (
+              <Text color={threads.resolved === threads.total ? 'success' : 'warning'}>{bar(threads.resolved, threads.total)}</Text>
+            )}
             <Text dimColor>{`${threads.resolved}/${threads.total} resolved`}</Text>
           </Box>
           {lead('unresolved', 'message', 'warning', unresolvedText(threads) ?? '', unresolvedLabel(threads) ?? '')}
@@ -376,7 +403,7 @@ export const register: Register = on => {
                 {row.path ? <Text dimColor>{row.path}</Text> : <Text color="warning">no worktree</Text>}
               </Box>
             </Box>
-            <Box flexDirection="column" alignItems="flex-end">
+            <Box flexDirection="column" alignItems="flex-end" flexShrink={0}>
               {lead('status', STATUS_ICON[row.pr?.status ?? 'none'] ?? null, TONE[row.pr?.status ?? 'none'], statusLine(row.pr?.status ?? 'none'), statusLabel(row.pr?.status ?? 'none'))}
               {row.threads ? lead('unresolved', 'message', 'warning', unresolvedText(row.threads) ?? '', unresolvedLabel(row.threads) ?? '') : null}
             </Box>
@@ -384,7 +411,7 @@ export const register: Register = on => {
           {chips(row.runs)}
           {row.threads ? (
             <Box flexDirection="row" columnGap={1}>
-              <Text color={row.threads.resolved === row.threads.total ? 'success' : 'warning'}>{bar(row.threads.resolved, row.threads.total)}</Text>
+              <Svg source={progressSvg(row.threads.resolved, row.threads.total, row.threads.resolved === row.threads.total ? 'success' : 'warning')} alt="threads progress" width={120} height={6} />
               <Text dimColor>{`${row.threads.resolved}/${row.threads.total} resolved`}</Text>
             </Box>
           ) : null}
@@ -469,8 +496,8 @@ export const register: Register = on => {
           {isFolded('session') ? (
             <Box flexDirection="column">
               {statusRow(sessionStatuses)}
-              <Text>{threadSummary(threadTotals(rows.map(row => row.threads)))}</Text>
-              <Text>{ciSummary(ciTotals(rows.map(row => worst(row.runs))))}</Text>
+              {summary('threads', threadTotals(rows.map(row => row.threads)))}
+              {summary('ci', ciTotals(rows.map(row => worst(row.runs))))}
             </Box>
           ) : (
             <Box flexDirection="column" rowGap={1}>
@@ -486,8 +513,8 @@ export const register: Register = on => {
           {isFolded('other') ? (
             <Box flexDirection="column">
               {statusRow(listedStatuses)}
-              <Text>{threadSummary(threadTotals(listed.map(pr => pr.threads)))}</Text>
-              <Text>{ciSummary(ciTotals(listed.map(pr => pr.run)))}</Text>
+              {summary('threads', threadTotals(listed.map(pr => pr.threads)))}
+              {summary('ci', ciTotals(listed.map(pr => pr.run)))}
             </Box>
           ) : (
             <Box flexDirection="column" rowGap={1}>
