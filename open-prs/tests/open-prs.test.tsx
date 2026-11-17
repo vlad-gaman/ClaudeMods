@@ -186,9 +186,9 @@ describe('pane', () => {
       const { texts, links, buttons } = await pane($, surface)
       expect(texts).toEqual([
         '1 branch', bars(40), '○ 1 review', 'PR 12', '⎇ feature', '/repo', REQUIRED,
-        '2 open', bars(20), bars(20), '○ 1 review', '◌ 1 draft', REQUIRED, 'PR 12', 'alice', '◌ draft', 'PR 15', 'ghost',
+        '1 open', bars(40), '◌ 1 draft', '◌ draft', 'PR 15', 'ghost',
       ])
-      expect(links).toEqual(['esendex/api', '#12', '#12', '#15'])
+      expect(links).toEqual(['esendex/api', '#12', '#15'])
       expect(buttons).toEqual(['Refresh', '▾ This session', '▾ Other open PRs'])
     }
   })
@@ -300,7 +300,7 @@ describe('pane', () => {
     // Assert
     expect(early).toBe(1)
     expect(callsTo('list').length).toBe(2)
-    expect((await pane($)).texts).toContain('2 open')
+    expect((await pane($)).texts).toContain('1 open')
   })
 
   test('retries once quickly, then waits for the regular refresh', async ($, on) => {
@@ -347,7 +347,7 @@ describe('pane', () => {
 
     // Assert
     expect(failedPane.buttons).toContain('Refresh')
-    expect((await pane($)).texts).toContain('2 open')
+    expect((await pane($)).texts).toContain('1 open')
   })
 
   test('a successful refresh cancels the pending quick retry', async ($, on) => {
@@ -644,7 +644,7 @@ describe('GitHub reviews and comments', () => {
 
   test("shows each PR's comment count beside its author", async ($, on) => {
     // Arrange
-    const { clock, callsTo } = engine(on, { counts: () => ok(counts([12, 3], [15, 1])) })
+    const { clock, callsTo } = engine(on, { counts: () => ok(counts([12, 3], [15, 1])), view: () => fail(NO_PR) })
 
     // Act
     await start($, clock)
@@ -658,7 +658,7 @@ describe('GitHub reviews and comments', () => {
 
   test('a failed count call keeps the last counts', async ($, on) => {
     // Arrange
-    const { clock, cli, callsTo } = engine(on, { counts: () => ok(counts([12, 3])) })
+    const { clock, cli, callsTo } = engine(on, { counts: () => ok(counts([12, 3])), view: () => fail(NO_PR) })
     await start($, clock)
     cli.counts = () => fail('HTTP 502')
     const before = callsTo('counts').length
@@ -673,7 +673,7 @@ describe('GitHub reviews and comments', () => {
 
   test('a new count replaces the last one', async ($, on) => {
     // Arrange
-    const { clock, cli } = engine(on, { counts: () => ok(counts([12, 3])) })
+    const { clock, cli } = engine(on, { counts: () => ok(counts([12, 3])), view: () => fail(NO_PR) })
     await start($, clock)
     cli.counts = () => ok(counts([12, 5]))
 
@@ -688,7 +688,7 @@ describe('GitHub reviews and comments', () => {
 
   test('a PR missing from the counts keeps its last count', async ($, on) => {
     // Arrange
-    const { clock, cli } = engine(on, { counts: () => ok(counts([12, 3])) })
+    const { clock, cli } = engine(on, { counts: () => ok(counts([12, 3])), view: () => fail(NO_PR) })
     await start($, clock)
     cli.counts = () => ok(counts())
 
@@ -1216,7 +1216,7 @@ describe('refresh', () => {
 
     // Assert
     expect(callsTo('list').length).toBeGreaterThan(before)
-    expect((await pane($)).texts).toContain('2 open')
+    expect((await pane($)).texts).toContain('1 open')
   })
 
   test('a failed branch lookup keeps the last branch PR', async ($, on) => {
@@ -1322,6 +1322,11 @@ describe('cards', () => {
     const { texts } = await pane($)
     expect(texts).toContain('╱ 1 no PR')
     expect(texts).toContain('╱'.repeat(40))
+    const ui = await mountPane($)
+    const stripes = (await ui.findAll({ type: 'Text' })).find(text => text.text === '╱'.repeat(40))
+    await ui.unmount()
+    expect(stripes?.props.backgroundColor).toBe('inactive')
+    expect(stripes?.props.color).toBeUndefined()
   })
 
   test('a card collapses and expands from its header, and the choice holds on a new mount', async ($, on) => {
@@ -1346,7 +1351,7 @@ describe('cards', () => {
 
   test("a collapsed card shows its PRs' thread and CI bars", async ($, on) => {
     // Arrange
-    const { clock } = engine(on, { counts: threaded })
+    const { clock } = engine(on, { counts: threaded, view: () => fail(NO_PR) })
     await start($, clock)
 
     // Act
@@ -1358,6 +1363,19 @@ describe('cards', () => {
     expect(texts).toContain('threads ██████░░░░ 3/5')
     expect(texts).toContain('ci ░░░░░░░░░░ 0/0')
     expect(texts).not.toContain('PR 15')
+  })
+
+  test('a session PR is listed in the session card only, not again under Other open PRs', async ($, on) => {
+    // Arrange
+    const { clock } = engine(on)
+
+    // Act
+    await start($, clock)
+
+    // Assert
+    const { texts, links } = await pane($)
+    expect(texts.filter(text => text === 'PR 12')).toHaveLength(1)
+    expect(links.filter(link => link === '#12')).toHaveLength(1)
   })
 
   test('the CLI errors card lists each failed call with its command, kind, time and message', async ($, on) => {

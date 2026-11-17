@@ -12,7 +12,7 @@ A side pane listing the repo's open GitHub or Azure DevOps PRs with their review
 
 - **Repo link** and a **Refresh** button. The list refreshes every 3 minutes, and again on a turn once it is a minute old.
 - **This session**: the branches this session works on: the session's own branch and the branch of each linked worktree of the repo. Each shows its PR (number and title, linked), its branch, its worktree folder (or "no worktree"), its status (approved, changes requested, review required, draft, merged or closed, or "no PR"), its unresolved thread count, a resolved/total thread bar, and its latest runs as chips.
-- **Other open PRs**: every open PR (at most 50), grouped by status, each with its author, comment count, thread bar and latest runs as chips.
+- **Other open PRs**: every open PR that is not on one of this session's branches (at most 50), grouped by status, each with its author, comment count, thread bar and latest runs as chips.
 - **CLI errors**: appears only while a `gh` or `az` call has failed. One entry per failed call: the command (tokens redacted), the exit code or "timed out" or "could not run", the time and the message. **Close** empties it. The last 20 failures are kept.
 - Each card has a header with a chevron (`▾` open, `▸` collapsed) that folds it. A collapsed card shows its status bar and a thread bar and a CI bar (CI ok/total). A folded card stays folded across refreshes and when the pane is reopened.
 - The status bar at the top of a card shows its PRs by status, in colours, with a striped segment for branches that have no PR. Its legend gives the counts.

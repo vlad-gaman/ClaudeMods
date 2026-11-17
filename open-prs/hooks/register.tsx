@@ -305,7 +305,7 @@ export const register: Register = on => {
     const statusRow = (items: Counted[]) => (
       <Box flexDirection="row">
         {statusBar(statusCounts(items), STATUS_WIDTH).map(segment => (
-          <Text key={`segment-${segment.key}`} color={TONE[segment.key]} backgroundColor={segment.key === 'none' ? 'inactive' : undefined}>
+          <Text key={`segment-${segment.key}`} color={segment.key === 'none' ? undefined : TONE[segment.key]} backgroundColor={segment.key === 'none' ? 'inactive' : undefined}>
             {(segment.key === 'none' ? '╱' : '█').repeat(segment.width)}
           </Text>
         ))}
@@ -399,9 +399,12 @@ export const register: Register = on => {
 
     const rows = sessionRows(branches, shown.prs, mine, ownRuns)
     const sessionStatuses = sessionCounted(rows)
-    const listed = shown.prs.slice(0, LIMIT)
+    // The PRs of this session's branches sit in the session card, so Other lists the rest.
+    const sessionNumbers = rows.flatMap(row => (row.pr ? [row.pr.number] : []))
+    const others = shown.prs.filter(pr => !sessionNumbers.includes(pr.number))
+    const listed = others.slice(0, LIMIT)
     const listedStatuses = listed.map(pr => statusOf(pr))
-    const count = shown.prs.length > LIMIT ? `${LIMIT}+` : String(shown.prs.length)
+    const count = others.length > LIMIT ? `${LIMIT}+` : String(others.length)
 
     return (
       <Box flexDirection="column" rowGap={1}>
