@@ -56,3 +56,7 @@ Findings left as they are:
 - Spec wording "takes the engine ... and the run state": providers take a `Port` and `FetchContext`; Azure caches live in the provider closure. The engine's `$`-passing rule forced the Port.
 
 Results after the review fixes: `claude plugin test .` in open-prs: `120 pass`, `0 fail`, `Ran 120 tests across 2 files` (109 hook tests, 11 provider tests). Type-check exit 0.
+
+## Decision (2026-11-17)
+
+No injection point. Tried `makeRegister(providers)` with `export const register = makeRegister()`: the engine refuses the module (`register is exported as something other than a const function`). So `register` must stay a literal const function that builds its own providers, a stub provider cannot be injected, and the scheduler and pane stay covered through the real providers' CLI calls (123 tests pass). The spec line on stub-provider tests is dropped.
