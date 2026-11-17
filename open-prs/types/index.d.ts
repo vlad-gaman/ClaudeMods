@@ -31,7 +31,8 @@ declare module 'claude-code' {
     'open-prs': {
       repo: RepoPrs | null
       branchPr: BranchPr | null
-      branchRun: Run | null
+      /** The ids of the cards the person has collapsed: `session`, `other`, `errors`. */
+      collapsed: string[]
       isDismissed: boolean
       isLoaded: boolean
       failedCli: 'gh' | 'az' | null
