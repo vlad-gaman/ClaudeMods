@@ -132,7 +132,7 @@ async function start($: Engine, clock: ReturnType<typeof mock.clock>) {
 const bars = (n: number) => '█'.repeat(n)
 const CHIP = /^\S+ ci(-\d)?$/
 
-const mountPane = ($: Engine, surface: (typeof SURFACES)[number] = 'desktop') =>
+const mountPane = ($: Engine, surface: (typeof SURFACES)[number] = 'terminal') =>
   $.ui.mount({
     plugin: 'open-prs',
     surface,
@@ -141,7 +141,7 @@ const mountPane = ($: Engine, surface: (typeof SURFACES)[number] = 'desktop') =>
     props: { title: 'Open PRs', isFocused: false, bodyColumns: 48, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} },
   })
 
-async function pane($: Engine, surface: (typeof SURFACES)[number] = 'desktop') {
+async function pane($: Engine, surface: (typeof SURFACES)[number] = 'terminal') {
   const ui = await mountPane($, surface)
   const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
   const found = await ui.findAll({ type: 'Link' })
@@ -174,7 +174,7 @@ const prs = ($: Engine) =>
   $.command.run({ command: 'prs', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 200 } })
 
 describe('pane', () => {
-  test('lists each open PR with its author and this branch, on every surface', async ($, on) => {
+  test('lists each open PR with its author and this branch, with glyphs on every surface but the desktop', async ($, on) => {
     // Arrange
     const { clock } = engine(on)
 
@@ -182,7 +182,7 @@ describe('pane', () => {
     await start($, clock)
 
     // Assert
-    for (const surface of SURFACES) {
+    for (const surface of SURFACES.filter(name => name !== 'desktop')) {
       const { texts, links, buttons } = await pane($, surface)
       expect(texts).toEqual([
         '1 branch', bars(40), '○ 1 review', 'PR 12', '⎇ feature', '/repo', REQUIRED,
@@ -1327,6 +1327,41 @@ describe('cards', () => {
     await ui.unmount()
     expect(stripes?.props.backgroundColor).toBeUndefined()
     expect(stripes?.props.color).toBe('inactive')
+  })
+
+  test('the desktop draws Lucide icons in the status colours, where the terminal draws glyphs', async ($, on) => {
+    // Arrange
+    const { clock } = engine(on, { view: () => fail(NO_PR), worktrees: () => raw(PORCELAIN), threads: threaded })
+    await start($, clock)
+
+    // Act
+    const ui = await mountPane($, 'desktop')
+    const icons = await ui.findAll({ type: 'Svg' })
+    const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+    await ui.unmount()
+
+    // Assert
+    expect(icons.length).toBeGreaterThan(0)
+    expect(icons.map(icon => icon.props.alt)).toContain('no PR')
+    const noPr = icons.find(icon => icon.props.alt === 'no PR')
+    expect(noPr?.props.source).toContain('<svg')
+    expect(noPr?.props.source).toContain('stroke="#')
+    expect(texts).toContain('2 no PR')
+    expect(texts.some(text => text.includes('⎇'))).toBe(false)
+  })
+
+  test('the terminal keeps glyphs and draws no Svg', async ($, on) => {
+    // Arrange
+    const { clock } = engine(on, { view: () => fail(NO_PR) })
+    await start($, clock)
+
+    // Act
+    const ui = await mountPane($, 'terminal')
+    const icons = await ui.findAll({ type: 'Svg' })
+    await ui.unmount()
+
+    // Assert
+    expect(icons).toEqual([])
   })
 
   test('a card collapses and expands from its header, and the choice holds on a new mount', async ($, on) => {

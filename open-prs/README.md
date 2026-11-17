@@ -18,7 +18,7 @@ A side pane listing the repo's open GitHub or Azure DevOps PRs with their review
 - The status bar at the top of a card shows its PRs by status, in colours, with a shaded (`▒`) segment for branches that have no PR. Its legend gives the counts.
 - A note instead of the cards when the remote is neither GitHub nor Azure DevOps, or when `gh` or `az` failed (it retries after 30 seconds and keeps the last list shown).
 
-The bars and icons are terminal glyphs (`█`/`░`/`▒`, `✓ ✗ ○ ◌ ◔ ◐ ⎇ ▾ ▸`). Run chips show the state glyph and the run name; they do not link to the run.
+On the desktop the status, branch, unresolved-thread and run icons are Lucide icons in the status colours (red changes or failed, amber review or partial, green approved or passed, blue running, grey draft, queued or no PR); thread bars are green once every thread is resolved and amber until then. Everywhere else the bars and icons are terminal glyphs (`█`/`░`/`▒`, `✓ ✗ ○ ◌ ◔ ◐ ⎇ ▾ ▸`). Run chips show the state glyph and the run name; they do not link to the run.
 
 It reads the `origin` remote and calls `gh` (GitHub) or `az` (Azure DevOps) in the session's folder, so both must be installed and signed in. The branches of other sessions' linked worktrees also appear under This session, since the mod cannot tell which session made a worktree.
 

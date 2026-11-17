@@ -5,11 +5,16 @@ import { azureProvider } from './azure'
 import { githubProvider } from './github'
 import { LIMIT, type Port, type Provider, type SessionBranch, type Snapshot, worst } from './provider'
 import { type Remote, remoteOf } from './remote'
+import { type IconName, iconSvg } from './icons'
 import { listWorktrees, sessionBranchesOf } from './worktrees'
 import { type CliFailure, failureOf, thrownFailureOf, withFailure } from './cli-log'
 import {
   type Counted,
   RUN_GLYPH,
+  bar,
+  legendLabel,
+  statusLabel,
+  unresolvedLabel,
   STATUS_WIDTH,
   TONE,
   ciSummary,
@@ -27,7 +32,6 @@ import {
   statusLine,
   statusOf,
   threadSummary,
-  threadText,
   threadTotals,
   type Threads,
   unresolvedText,
@@ -228,6 +232,8 @@ function toggle($: EngineInterface, id: string) {
   return update($, collapsed, ids => (ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]))
 }
 
+const STATUS_ICON: Partial<Record<string, IconName>> = { changes: 'changes', required: 'required', approved: 'approved', draft: 'draft', none: 'branch' }
+
 const RULE = '─'.repeat(30)
 
 export const register: Register = on => {
@@ -276,7 +282,21 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Button, Link, Text } = $.ui.resolve(e)
+    const resolved = $.ui.resolve(e)
+    const { Box, Button, Link, Text } = resolved
+    const Svg = e.surface === 'desktop' && 'Svg' in resolved ? resolved.Svg : null
+    // The desktop draws a Lucide icon in the tone's colour; every other surface keeps the glyph text.
+    const lead = (key: string, icon: IconName | null, tone: string | undefined, glyphText: string, label: string) =>
+      Svg && icon ? (
+        <Box key={key} flexDirection="row" columnGap={1}>
+          <Svg source={iconSvg(icon, tone ?? 'inactive')} alt={label} width={14} height={14} />
+          <Text color={tone}>{label}</Text>
+        </Box>
+      ) : (
+        <Text key={key} color={tone}>
+          {glyphText}
+        </Text>
+      )
     const [loaded, shown, mine, branches, ownRuns, failed, refreshing, note, errors, folded] = await Promise.all([
       read($, isLoaded),
       read($, repo),
@@ -313,27 +333,32 @@ export const register: Register = on => {
     )
     const legendRow = (items: Counted[]) => (
       <Box flexDirection="row" columnGap={1}>
-        {statusCounts(items).map(count => (
-          <Text key={`legend-${count.key}`} color={TONE[count.key]}>
-            {legendText(count)}
-          </Text>
-        ))}
+        {statusCounts(items).map(count =>
+          lead(`legend-${count.key}`, STATUS_ICON[count.key] ?? null, TONE[count.key], legendText(count), legendLabel(count)),
+        )}
       </Box>
     )
     const threadBlock = (threads: Threads) =>
       threads ? (
         <Box flexDirection="column">
-          <Text>{threadText(threads) ?? ''}</Text>
-          <Text dimColor>{unresolvedText(threads) ?? ''}</Text>
+          <Box flexDirection="row" columnGap={1}>
+            <Text color={threads.resolved === threads.total ? 'success' : 'warning'}>{bar(threads.resolved, threads.total)}</Text>
+            <Text dimColor>{`${threads.resolved}/${threads.total} resolved`}</Text>
+          </Box>
+          {lead('unresolved', 'message', 'warning', unresolvedText(threads) ?? '', unresolvedLabel(threads) ?? '')}
         </Box>
       ) : null
     const chips = (runs: Run[]) =>
       runs.length === 0 ? null : (
         <Box flexDirection="row" columnGap={1}>
           {runs.map((run, i) => (
-            <Text key={`run-${i}`} backgroundColor={RUN_TONE[run.state]}>
-              {`${RUN_GLYPH[run.state]} ${run.name}`}
-            </Text>
+            Svg ? (
+              lead(`run-${i}`, run.state, RUN_TONE[run.state], `${RUN_GLYPH[run.state]} ${run.name}`, run.name)
+            ) : (
+              <Text key={`run-${i}`} backgroundColor={RUN_TONE[run.state]}>
+                {`${RUN_GLYPH[run.state]} ${run.name}`}
+              </Text>
+            )
           ))}
         </Box>
       )
@@ -345,9 +370,9 @@ export const register: Register = on => {
             <Text>{row.pr.title}</Text>
           </Box>
         ) : null}
-        <Text>{`⎇ ${row.branch}`}</Text>
+        {lead('branch', 'branch', 'inactive', `⎇ ${row.branch}`, row.branch)}
         {row.path ? <Text dimColor>{row.path}</Text> : <Text color="warning">no worktree</Text>}
-        <Text color={TONE[row.pr?.status ?? 'none']}>{statusLine(row.pr?.status ?? 'none')}</Text>
+        {lead('status', STATUS_ICON[row.pr?.status ?? 'none'] ?? null, TONE[row.pr?.status ?? 'none'], statusLine(row.pr?.status ?? 'none'), statusLabel(row.pr?.status ?? 'none'))}
         {threadBlock(row.threads)}
         {chips(row.runs)}
       </Box>
@@ -444,7 +469,7 @@ export const register: Register = on => {
               {listed.length === 0 ? <Text dimColor>No open PRs.</Text> : null}
               {groupByStatus(listed).map(group => (
                 <Box key={`group-${group.status}`} flexDirection="column">
-                  <Text color={TONE[group.status]}>{statusLine(group.status)}</Text>
+                  {lead('group', STATUS_ICON[group.status] ?? null, TONE[group.status], statusLine(group.status), statusLabel(group.status))}
                   {group.prs.map(prRow)}
                 </Box>
               ))}
