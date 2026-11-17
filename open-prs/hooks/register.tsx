@@ -405,7 +405,9 @@ export const register: Register = on => {
         <Box flexDirection="row" columnGap={1}>
           {runs.map((run, i) => (
             Svg ? (
-              lead(`run-${i}`, run.state, RUN_TONE[run.state], `${RUN_GLYPH[run.state]} ${run.name}`, run.name)
+              <Box key={`run-${i}`} borderStyle="round" borderColor={RUN_TONE[run.state]} paddingX={1}>
+                {lead(`run-${i}`, run.state, RUN_TONE[run.state], `${RUN_GLYPH[run.state]} ${run.name}`, run.name)}
+              </Box>
             ) : (
               <Text key={`run-${i}`} backgroundColor={RUN_TONE[run.state]}>
                 {`${RUN_GLYPH[run.state]} ${run.name}`}
