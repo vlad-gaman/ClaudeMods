@@ -61,3 +61,12 @@ export const progressSvg = (done: number, total: number, tone: string, isFull = 
   const filled = total > 0 ? (done / total) * w : 0
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${isFull ? FULL : w}" height="6" viewBox="0 0 ${w} 6"${isFull ? ' preserveAspectRatio="none"' : ''}><rect width="${w}" height="6" rx="3" fill="${TRACK}"/>${filled > 0 ? `<rect width="${filled}" height="6" rx="3" fill="${HEX[tone] ?? HEX.inactive}"/>` : ''}</svg>`
 }
+
+/** A run chip as one slim pill: an outline in the run's tone, its icon and its name. Returns the markup and its width. */
+export const pillSvg = (name: IconName, tone: string, label: string) => {
+  const colour = HEX[tone] ?? HEX.inactive
+  const width = Math.ceil(34 + label.length * 6.8)
+  const text = label.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+  const source = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="22" viewBox="0 0 ${width} 22"><rect x="0.5" y="0.5" width="${width - 1}" height="21" rx="10.5" fill="none" stroke="${colour}" stroke-opacity="0.7"/><g transform="translate(9 4) scale(0.58)" fill="none" stroke="${colour}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${PATHS[name]}</g><text x="27" y="15" font-family="system-ui, sans-serif" font-size="12" fill="#d1d5db">${text}</text></svg>`
+  return { source, width }
+}

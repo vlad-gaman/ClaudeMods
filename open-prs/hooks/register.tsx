@@ -6,7 +6,7 @@ import { githubProvider } from './github'
 import { LIMIT, type Port, type Provider, type SessionBranch, type Snapshot, worst } from './provider'
 import { type Remote, remoteOf } from './remote'
 import { DEMO_BRANCHES, DEMO_BRANCH_PR, DEMO_REPO, DEMO_RUNS, demoErrors } from './demo'
-import { type IconName, iconSvg, progressSvg, statusBarSvg } from './icons'
+import { type IconName, iconSvg, pillSvg, progressSvg, statusBarSvg } from './icons'
 import { listWorktrees, sessionBranchesOf } from './worktrees'
 import { type CliFailure, failureOf, thrownFailureOf, withFailure } from './cli-log'
 import {
@@ -405,9 +405,7 @@ export const register: Register = on => {
         <Box flexDirection="row" columnGap={1} flexWrap={Svg ? 'wrap' : undefined} alignItems={Svg ? 'flex-start' : undefined}>
           {runs.map((run, i) => (
             Svg ? (
-              <Box key={`run-${i}`} borderStyle="round" borderColor={RUN_TONE[run.state]} alignSelf="flex-start" flexGrow={0} flexShrink={0}>
-                {lead(`run-${i}`, run.state, RUN_TONE[run.state], `${RUN_GLYPH[run.state]} ${run.name}`, run.name)}
-              </Box>
+              <Svg key={`run-${i}`} source={pillSvg(run.state, RUN_TONE[run.state], run.name).source} alt={run.name} width={pillSvg(run.state, RUN_TONE[run.state], run.name).width} height={22} />
             ) : (
               <Text key={`run-${i}`} backgroundColor={RUN_TONE[run.state]}>
                 {`${RUN_GLYPH[run.state]} ${run.name}`}
