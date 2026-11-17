@@ -1,7 +1,7 @@
 # Keep the latest several runs per PR and branch
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by:
 
 ## Problem
@@ -19,3 +19,7 @@ Providers return the latest N runs (start with 5) per PR and for the branch, new
 - `claude plugin test .` in `open-prs` is green.
 
 ## Comments
+
+- Done. `OpenPr.runs: Run[]` (newest first, at most `RUNS = 5`, exported from `hooks/provider.ts`), and `OpenPr.run` is `worst(runs)`. The branch answer is `Snapshot.branchRuns: Run[] | null | undefined` (replaces `branchRun`); the register writes a new `branchRuns` atom and keeps `branchRun` as `worst(branchRuns)`, so the render is unchanged.
+- Deviations: `run` is the worst of the five listed runs, not of every run (the ticket says `run` is computed from `runs`). Azure lists the latest run per definition, newest first, as before. GitHub has no run timestamps in the rollup, so its order is the rollup order, not a true "newest first". A failed call keeps the last runs; a PR whose Azure runs drop out keeps the runs it showed.
+- Tests: 133 pass (127 before, plus 6 new GitHub and Azure cases; the existing "no branch" tests now assert `branchRuns`).

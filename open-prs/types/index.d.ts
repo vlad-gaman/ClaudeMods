@@ -15,6 +15,8 @@ export type OpenPr = {
   review: ReviewState
   comments: number | null
   threads: { total: number; resolved: number } | null
+  /** The newest runs (at most five), newest first; `run` is the worst of them. */
+  runs: Run[]
   run: Run | null
 }
 

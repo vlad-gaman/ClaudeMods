@@ -8,7 +8,7 @@ export const SEVERITY: RunState[] = ['failed', 'cancelled', 'partial', 'running'
  * What one fetch found. Each field is tri-state: `undefined` means the call failed or never ran, so the last answer
  * stays; `null` means the host confirmed there is none; a value is the answer.
  */
-export type Snapshot = { repo?: RepoPrs | null; branchPr?: BranchPr | null; branchRun?: Run | null }
+export type Snapshot = { repo?: RepoPrs | null; branchPr?: BranchPr | null; branchRuns?: Run[] | null }
 
 /** What a fetch is given besides the remote: the current branch (null when detached) and the last repo answer. */
 export type FetchContext = { branch: string | null; previous: RepoPrs | null }
@@ -44,6 +44,10 @@ export async function cli<T>(port: Port, argv: string[]): Promise<CliResult<T>> 
 
 /** The run that counts for a PR list: the worst state among its runs (failed first, succeeded last). */
 export const worst = (runs: Run[]) => [...runs].sort((a, b) => SEVERITY.indexOf(a.state) - SEVERITY.indexOf(b.state))[0] ?? null
+
+/** How many runs a PR or the branch keeps: the newest, in the order the host lists them. */
+export const RUNS = 5
+export const latestRuns = (runs: Run[]) => runs.slice(0, RUNS)
 
 /** The PR this one showed last time, when the last answer was for the same repo. */
 export const previousPr = (previous: RepoPrs | null, url: string, number: number) =>

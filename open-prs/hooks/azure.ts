@@ -1,5 +1,5 @@
 import type { OpenPr, PrState, RepoPrs, ReviewState, Run, RunState } from '../types'
-import { type FetchContext, LIMIT, type Port, type Provider, type Snapshot, cli, previousPr, worst } from './provider'
+import { type FetchContext, LIMIT, type Port, type Provider, type Snapshot, cli, latestRuns, previousPr, worst } from './provider'
 import type { Remote } from './remote'
 
 // The shapes of the `az` JSON this provider reads. The argv of each call is pinned in tests/providers.test.ts.
@@ -79,27 +79,34 @@ async function fetchAzure(
 
   // Only the project's latest runs are read, so a PR whose run has dropped out of them keeps the last one shown.
   const known = 'data' in runs && 'data' in repoId ? runs.data.filter(run => run.repo === repoId.data) : null
-  const runOf = (ref: string, all: AzRun[]) => {
+  // The latest run of each definition, newest first.
+  const runsOf = (ref: string, all: AzRun[]): Run[] => {
     const matching = all.filter(run => run.branch === ref)
     const latest = matching.filter((run, i) => matching.findIndex(other => other.definition === run.definition) === i)
-    return worst(latest.map(run => ({ name: run.name, state: azRunState(run), url: `${web}/_build/results?buildId=${run.id}` })))
+    return latest.map(run => ({ name: run.name, state: azRunState(run), url: `${web}/_build/results?buildId=${run.id}` }))
   }
-  const toOpenPr = (pr: AzPr): OpenPr => ({
-    number: pr.number,
-    title: pr.title,
-    author: pr.author ?? 'unknown',
-    isDraft: pr.isDraft ?? false,
-    url: `${git}/pullrequest/${pr.number}`,
-    review: azReview(pr),
-    comments: commentCounts.get(`${git}/pullrequest/${pr.number}`)?.count ?? previousPr(previous, url, pr.number)?.comments ?? null,
-    threads: commentCounts.get(`${git}/pullrequest/${pr.number}`)?.threads ?? previousPr(previous, url, pr.number)?.threads ?? null,
-    run: (known && runOf(`refs/pull/${pr.number}/merge`, known)) || (previousPr(previous, url, pr.number)?.run ?? null),
-  })
+  const toOpenPr = (pr: AzPr): OpenPr => {
+    // A PR whose runs have dropped out of the project's latest keeps the runs it showed last.
+    const fresh = known ? latestRuns(runsOf(`refs/pull/${pr.number}/merge`, known)) : []
+    const runs = fresh.length > 0 ? fresh : (previousPr(previous, url, pr.number)?.runs ?? [])
+    return {
+      number: pr.number,
+      title: pr.title,
+      author: pr.author ?? 'unknown',
+      isDraft: pr.isDraft ?? false,
+      url: `${git}/pullrequest/${pr.number}`,
+      review: azReview(pr),
+      comments: commentCounts.get(`${git}/pullrequest/${pr.number}`)?.count ?? previousPr(previous, url, pr.number)?.comments ?? null,
+      threads: commentCounts.get(`${git}/pullrequest/${pr.number}`)?.threads ?? previousPr(previous, url, pr.number)?.threads ?? null,
+      runs,
+      run: worst(runs),
+    }
+  }
   const branchPr = mine && 'data' in mine ? mine.data[0] : undefined
   return {
     repo: 'data' in open ? { slug: `${remote.project}/${remote.name}`, url, prs: open.data.map(toOpenPr) } : undefined,
     branchPr: !mine ? null : 'data' in mine ? (branchPr ? { number: branchPr.number, title: branchPr.title, state: azState(branchPr) } : null) : undefined,
-    branchRun: !branch ? null : known ? runOf(`refs/heads/${branch}`, known) : undefined,
+    branchRuns: !branch ? null : known ? latestRuns(runsOf(`refs/heads/${branch}`, known)) : undefined,
   }
 }
 

@@ -60,6 +60,7 @@ const threadCounts = (...nodes: [number, number, boolean[]][]) => ({
     },
   },
 })
+const refChecks = (nodes: unknown[]) => ({ data: { repository: { ref: { target: { statusCheckRollup: { contexts: { nodes } } } } } } })
 const QUERY = expect.stringMatching(/^query=/)
 
 describe('GitHub provider', () => {
@@ -97,7 +98,7 @@ describe('GitHub provider', () => {
       ['gh', 'pr', 'view'],
       ['gh', 'api', 'graphql'],
     ])
-    expect(snapshot.branchRun).toBeNull()
+    expect(snapshot.branchRuns).toBeNull()
   })
 
   test('maps each PR to its review, comments and Azure pipeline, and names the repo', async () => {
@@ -123,6 +124,7 @@ describe('GitHub provider', () => {
           review: 'approved',
           comments: 3,
           threads: null,
+          runs: [{ name: 'api-ci', state: 'failed', url: BUILD }],
           run: { name: 'api-ci', state: 'failed', url: BUILD },
         },
       ],
@@ -161,7 +163,7 @@ describe('GitHub provider', () => {
     const previous: RepoPrs = {
       slug: 'esendex/api',
       url: 'https://github.com/esendex/api/pulls',
-      prs: [{ number: 12, title: 'PR 12', author: 'alice', isDraft: false, url: 'x', review: 'required', comments: 5, threads: { total: 4, resolved: 1 }, run: null }],
+      prs: [{ number: 12, title: 'PR 12', author: 'alice', isDraft: false, url: 'x', review: 'required', comments: 5, threads: { total: 4, resolved: 1 }, runs: [], run: null }],
     }
     const kept = stubPort([ok([pr(12)]), fail(NO_PR), ok({ data: { repository: { ref: null } } }), fail('HTTP 502')])
     const never = stubPort([ok([pr(12)]), fail(NO_PR), ok({ data: { repository: { ref: null } } }), fail('HTTP 502')])
@@ -173,6 +175,64 @@ describe('GitHub provider', () => {
     // Assert
     expect(withPrevious.repo?.prs[0]?.threads).toEqual({ total: 4, resolved: 1 })
     expect(withoutPrevious.repo?.prs[0]?.threads).toBeNull()
+  })
+
+  test('lists the newest five pipeline runs of a PR, and the worst of those five is its run', async () => {
+    // Arrange
+    const builds = [1, 2, 3, 4, 5, 6, 7].map(id => ({
+      __typename: 'CheckRun',
+      name: `p${id}`,
+      status: 'COMPLETED',
+      conclusion: id < 6 ? 'SUCCESS' : 'FAILURE',
+      detailsUrl: `https://commify.visualstudio.com/p/_build/results?buildId=${id}`,
+    }))
+    const { port } = stubPort([ok([pr(12, { statusCheckRollup: builds })]), fail(NO_PR), ok({ data: { repository: { ref: null } } }), ok(counts())])
+
+    // Act
+    const snapshot = await githubProvider().fetch(port, GITHUB, BRANCH)
+
+    // Assert
+    const listed = snapshot.repo?.prs[0]
+    expect(listed?.runs.map(run => run.name)).toEqual(['p1', 'p2', 'p3', 'p4', 'p5'])
+    expect(listed?.run?.state).toBe('succeeded')
+  })
+
+  test('a PR with no pipeline lists no runs', async () => {
+    // Arrange
+    const { port } = stubPort([ok([pr(12)]), fail(NO_PR), ok({ data: { repository: { ref: null } } }), ok(counts())])
+
+    // Act
+    const snapshot = await githubProvider().fetch(port, GITHUB, BRANCH)
+
+    // Assert
+    expect(snapshot.repo?.prs[0]?.runs).toEqual([])
+    expect(snapshot.repo?.prs[0]?.run).toBeNull()
+  })
+
+  test('lists the branch runs newest first, and none when the branch has no pipeline', async () => {
+    // Arrange
+    const build = (id: number) => ({ __typename: 'CheckRun', name: `b${id}`, status: 'COMPLETED', conclusion: 'SUCCESS', detailsUrl: `https://commify.visualstudio.com/p/_build/results?buildId=${id}` })
+    const busy = stubPort([ok([]), fail(NO_PR), ok(refChecks([build(1), build(2)])), ok(counts())])
+    const idle = stubPort([ok([]), fail(NO_PR), ok(refChecks([])), ok(counts())])
+
+    // Act
+    const withRuns = await githubProvider().fetch(busy.port, GITHUB, BRANCH)
+    const withNone = await githubProvider().fetch(idle.port, GITHUB, BRANCH)
+
+    // Assert
+    expect(withRuns.branchRuns?.map(run => run.name)).toEqual(['b1', 'b2'])
+    expect(withNone.branchRuns).toEqual([])
+  })
+
+  test('a failed branch-checks call leaves the branch runs as they were', async () => {
+    // Arrange
+    const { port } = stubPort([ok([]), fail(NO_PR), fail('HTTP 502'), ok(counts())])
+
+    // Act
+    const snapshot = await githubProvider().fetch(port, GITHUB, BRANCH)
+
+    // Assert
+    expect(snapshot.branchRuns).toBeUndefined()
   })
 
   test('a gh call that cannot run is unknown: the repo is left as it was', async () => {
@@ -239,8 +299,48 @@ describe('Azure DevOps provider', () => {
       ['az', 'pipelines', 'runs', 'list'],
       ['az', 'repos', 'show', '--org'],
     ])
-    expect(snapshot.branchRun).toBeNull()
+    expect(snapshot.branchRuns).toBeNull()
     expect(snapshot.branchPr).toBeNull()
+  })
+
+  test('lists the latest run of each definition for a PR and the branch, newest first, five at most', async () => {
+    // Arrange
+    const run = (definition: number, branch: string) => ({ id: 100 + definition, branch, status: 'completed', result: 'succeeded', name: `def-${definition}`, definition, repo: 'repo-id' })
+    const runs = [
+      run(1, 'refs/pull/7/merge'), run(2, 'refs/pull/7/merge'), run(1, 'refs/pull/7/merge'),
+      run(3, 'refs/pull/7/merge'), run(4, 'refs/pull/7/merge'), run(5, 'refs/pull/7/merge'), run(6, 'refs/pull/7/merge'),
+      run(9, 'refs/heads/feature'),
+    ]
+    const { port } = stubPort([ok([azPr(7)]), ok([]), ok(runs), ok('repo-id')])
+
+    // Act
+    const snapshot = await azureProvider().fetch(port, AZURE, BRANCH)
+
+    // Assert
+    expect(snapshot.repo?.prs[0]?.runs.map(listed => listed.name)).toEqual(['def-1', 'def-2', 'def-3', 'def-4', 'def-5'])
+    expect(snapshot.repo?.prs[0]?.run?.name).toBe('def-1')
+    expect(snapshot.branchRuns?.map(listed => listed.name)).toEqual(['def-9'])
+  })
+
+  test('a PR with no runs lists none, and a failed runs call keeps its last runs', async () => {
+    // Arrange
+    const old = { name: 'old', state: 'succeeded' as const, url: 'https://dev.azure.com/o' }
+    const previous: RepoPrs = {
+      slug: 'Titan Accounts/api',
+      url: 'https://dev.azure.com/commify/Titan%20Accounts/_git/api/pullrequests',
+      prs: [{ number: 7, title: 'PR 7', author: 'Bob', isDraft: false, url: 'x', review: 'required', comments: null, threads: null, runs: [old], run: old }],
+    }
+    const idle = stubPort([ok([azPr(7)]), ok([]), ok('repo-id')])
+    const failed = stubPort([ok([azPr(7)]), fail('TF400'), ok('repo-id')])
+
+    // Act
+    const none = await azureProvider().fetch(idle.port, AZURE, { branch: null, previous: null })
+    const kept = await azureProvider().fetch(failed.port, AZURE, { branch: null, previous })
+
+    // Assert
+    expect(none.repo?.prs[0]?.runs).toEqual([])
+    expect(kept.repo?.prs[0]?.runs).toEqual([old])
+    expect(kept.repo?.prs[0]?.run).toEqual(old)
   })
 
   test('the threads call for each PR names the PR and the project, and counts text comments through publish', async () => {

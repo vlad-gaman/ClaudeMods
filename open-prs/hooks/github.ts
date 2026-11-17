@@ -1,5 +1,5 @@
 import type { BranchPr, OpenPr, PrState, RepoPrs, ReviewState, Run, RunState } from '../types'
-import { type FetchContext, LIMIT, type Port, type Provider, type Snapshot, cli, previousPr, worst } from './provider'
+import { type FetchContext, LIMIT, type Port, type Provider, type Snapshot, cli, latestRuns, previousPr, worst } from './provider'
 import type { Remote } from './remote'
 
 // The shapes of the `gh` JSON this provider reads. The argv of each call is pinned in tests/providers.test.ts.
@@ -78,8 +78,8 @@ function ghReview(pr: GhOpenPr): ReviewState {
   return states.includes('CHANGES_REQUESTED') ? 'changes' : states.includes('APPROVED') ? 'approved' : 'required'
 }
 
-/** The run a PR shows: the worst of its Azure pipelines when it has any, else of its GitHub Actions workflows. */
-function pipelineOf(checks: GhCheck[] | null | undefined, slug: string): Run | null {
+/** The runs a PR shows, in rollup order: its Azure pipelines when it has any, else its GitHub Actions workflows. */
+function pipelinesOf(checks: GhCheck[] | null | undefined, slug: string): Run[] {
   const actions = `https://github.com/${slug}/actions/runs/`.toLowerCase()
   const builds: Run[] = []
   const workflows: Run[] = []
@@ -91,7 +91,7 @@ function pipelineOf(checks: GhCheck[] | null | undefined, slug: string): Run | n
     else if (url.toLowerCase().startsWith(actions))
       workflows.push({ name: check.workflowName || check.checkSuite?.workflowRun?.workflow.name || check.name || 'workflow', state, url })
   }
-  return worst(builds.length > 0 ? builds : workflows)
+  return builds.length > 0 ? builds : workflows
 }
 
 async function fetchGitHub(port: Port, slug: string, { branch, previous }: FetchContext): Promise<Snapshot> {
@@ -124,15 +124,16 @@ async function fetchGitHub(port: Port, slug: string, { branch, previous }: Fetch
     review: ghReview(pr),
     comments: commentsOf(pr.number),
     threads: threadsOf(pr.number),
-    run: pipelineOf(pr.statusCheckRollup, slug),
+    runs: latestRuns(pipelinesOf(pr.statusCheckRollup, slug)),
+    run: worst(latestRuns(pipelinesOf(pr.statusCheckRollup, slug))),
   })
   return {
     repo: 'data' in open ? { slug, url, prs: open.data.map(toOpenPr) } : undefined,
     branchPr: 'data' in mine ? { number: mine.data.number, title: mine.data.title, state: ghState(mine.data) } : 'isMissing' in mine && mine.isMissing ? null : undefined,
-    branchRun: !checks
+    branchRuns: !checks
       ? null
       : 'data' in checks
-        ? pipelineOf(checks.data.data.repository?.ref?.target.statusCheckRollup?.contexts.nodes, slug)
+        ? latestRuns(pipelinesOf(checks.data.data.repository?.ref?.target.statusCheckRollup?.contexts.nodes, slug))
         : undefined,
   }
 }

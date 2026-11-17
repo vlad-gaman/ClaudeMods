@@ -3,12 +3,14 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import { azureProvider } from './azure'
 import { githubProvider } from './github'
-import { LIMIT, type Port, type Provider, type Snapshot } from './provider'
+import { LIMIT, type Port, type Provider, type Snapshot, worst } from './provider'
 import { type Remote, remoteOf } from './remote'
+import type { Run } from '../types'
 
 const repo = atom({ plugin: 'open-prs', key: 'repo' } as const, null)
 const branchPr = atom({ plugin: 'open-prs', key: 'branchPr' } as const, null)
 const branchRun = atom({ plugin: 'open-prs', key: 'branchRun' } as const, null)
+const branchRuns = atom({ plugin: 'open-prs', key: 'branchRuns' } as const, [] as Run[])
 const isDismissed = atom({ plugin: 'open-prs', key: 'isDismissed' } as const, false)
 const isLoaded = atom({ plugin: 'open-prs', key: 'isLoaded' } as const, false)
 const failedCli = atom({ plugin: 'open-prs', key: 'failedCli' } as const, null)
@@ -88,7 +90,11 @@ async function fetchPrs($: EngineInterface, s: State): Promise<(() => Promise<vo
   // A failed call keeps the last answer; only a confirmed "none" clears it.
   if (snapshot.repo !== undefined && (await isLive($, s))) await update($, repo, () => snapshot.repo ?? null)
   if (snapshot.branchPr !== undefined && (await isLive($, s))) await update($, branchPr, () => snapshot.branchPr ?? null)
-  if (snapshot.branchRun !== undefined && (await isLive($, s))) await update($, branchRun, () => snapshot.branchRun ?? null)
+  if (snapshot.branchRuns !== undefined && (await isLive($, s))) {
+    const runs = snapshot.branchRuns ?? []
+    await update($, branchRuns, () => runs)
+    await update($, branchRun, () => worst(runs))
+  }
   const failed = snapshot.repo === undefined && provider ? provider.cli : null
   if (await isLive($, s)) await update($, failedCli, () => failed)
 
