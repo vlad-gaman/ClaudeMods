@@ -24,7 +24,6 @@ It reads the `origin` remote and calls `gh` (GitHub) or `az` (Azure DevOps) in t
 
 ## Commands
 
-- `/prs-demo`: show the pane with stub PRs, branches, runs and a CLI error, to see its look without a repo. `/prs` goes back to the real PRs.
 - `/prs`: reopen the pane. A dismissed pane stays closed through refreshes and new sessions until this command reopens it.
 
 ## Develop
