@@ -1,6 +1,7 @@
 {
   "name": "usage-band",
-  "version": "0.2.1",
+  "version": "0.2.2",
+  "author": { "name": "Vlad Gaman" },
   "description": "A band above the prompt showing usage for this chat, the 5h window and the week",
   "types": "./types/index.d.ts",
   "lucide": "chart-column",

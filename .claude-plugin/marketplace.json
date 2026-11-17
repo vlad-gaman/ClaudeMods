@@ -1,5 +1,6 @@
 {
   "name": "vlad-claude-mods",
+  "description": "Mods for Claude Code: panes, bands and hooks that change its interface and behaviour.",
   "owner": {
     "name": "Vlad Gaman"
   },
