@@ -2,6 +2,12 @@
 
 Turns a long, unstructured prompt into one structured prompt: it asks about points that conflict or are unclear, then runs the result only after you type go.
 
+## Install
+
+```
+/plugin install brain-dump --marketplace vlad-gaman/ClaudeMods
+```
+
 ## How it works
 
 1. Type or paste a long prompt (a **dump**). At 200 words or more, a band offers **Structure** or **Ignore**. You can also start it with `/brain-dump` or by beginning a prompt with `structure:`.

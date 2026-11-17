@@ -2,6 +2,12 @@
 
 A side pane listing the repo's open GitHub or Azure DevOps PRs with their review state, comment count and pipeline runs. It also shows the current branch's PR and run.
 
+## Install
+
+```
+/plugin install open-prs --marketplace vlad-gaman/ClaudeMods
+```
+
 ## What you see
 
 - **Repo link** and a **Refresh** button. The list refreshes every 3 minutes, and again on a turn once it is a minute old.

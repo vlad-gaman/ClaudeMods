@@ -30,12 +30,16 @@ claude --plugin-dir ./usage-band
 
 Repeat the flag to load several mods. Edits reload with `/reload-plugins`.
 
-To keep a mod installed, add a local marketplace and install from it. Only `usage-band` ships a `marketplace.json`:
+To keep a mod installed, add this repo as a marketplace (`vlad-claude-mods`, defined in `.claude-plugin/marketplace.json`) and install from it:
 
 ```bash
-claude plugin marketplace add ./usage-band
-claude plugin install usage-band@local-mods
+claude plugin marketplace add vlad-gaman/ClaudeMods
+claude plugin install usage-band@vlad-claude-mods
 ```
+
+From a clone, `claude plugin marketplace add .` works the same. A marketplace install tracks `main`; the zips under Releases are for loading a fixed version with `--plugin-dir`.
+
+A new mod needs an entry in `.claude-plugin/marketplace.json` (`name` and `source: "./<mod>"`).
 
 Docs: [Create a mod](https://code.claude.com/docs/en/plugins/mods/create.md), [Install and manage plugins](https://code.claude.com/docs/en/plugins/install.md).
 
@@ -75,7 +79,7 @@ Change a README in the same commit as the behaviour it describes. Each README's 
 
 ## Releases
 
-A push to `main` releases every mod whose files changed. Each release is tagged `<mod>-v<version>`, takes the version from the mod's `.claude-plugin/plugin.json`, and attaches a zip of the mod (tracked files, without `tests/`). A mod that changed without a version bump has its tag already, so it is skipped with a warning in the run summary: bump the version to release it. Every change to a mod should bump its version: the **Check mod versions** workflow fails a pull request that changes a mod without bumping it.
+A push to `main` releases every mod whose files changed. Every change to a mod bumps its `version` in `.claude-plugin/plugin.json`, so each change gets its own release. Each release is tagged `<mod>-v<version>`, takes the version from the mod's `.claude-plugin/plugin.json`, and attaches a zip of the mod (tracked files, without `tests/`). A mod that changed without a version bump has its tag already, so it is skipped with a warning in the run summary: bump the version to release it. Every change to a mod should bump its version: the **Check mod versions** workflow fails a pull request that changes a mod without bumping it.
 
 To release every mod whose current version has no release yet (the first time, or after a missed run), run the **Release mods** workflow by hand with `all` ticked. The workflow is `.github/workflows/release.yml`; the logic is `.github/scripts/release.sh`, which `DRY_RUN=1` runs without creating anything.
 

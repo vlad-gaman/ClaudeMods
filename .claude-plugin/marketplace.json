@@ -1,0 +1,48 @@
+{
+  "name": "vlad-claude-mods",
+  "owner": {
+    "name": "Vlad Gaman"
+  },
+  "plugins": [
+    {
+      "name": "agent-pipeline",
+      "source": "./agent-pipeline",
+      "description": "Runs a vault ticket through test-first implementation, review and docs to a draft PR, with four subagents"
+    },
+    {
+      "name": "brain-dump",
+      "source": "./brain-dump",
+      "description": "Turns a long, unstructured prompt into one structured prompt: it asks about points that conflict or are unclear, then runs the result only after you type go."
+    },
+    {
+      "name": "model-router",
+      "source": "./model-router",
+      "description": "Picks haiku, sonnet or opus once per session from the first prompt and routes plain subagents to cheaper models"
+    },
+    {
+      "name": "open-prs",
+      "source": "./open-prs",
+      "description": "A side pane listing the repo's open GitHub or Azure DevOps PRs with their review state, comment count and pipeline runs"
+    },
+    {
+      "name": "session-handoff",
+      "source": "./session-handoff",
+      "description": "Writes a handoff file for the current session automatically on /handoff-session, shortly before the prompt cache goes cold, and when the context grows past a token threshold."
+    },
+    {
+      "name": "session-panel",
+      "source": "./session-panel",
+      "description": "A pane showing this session's connectors, skills, context files and to-do list, each in its own sub-panel"
+    },
+    {
+      "name": "switchboard",
+      "source": "./switchboard",
+      "description": "A side panel to switch each Claude Code mod and plugin on or off"
+    },
+    {
+      "name": "usage-band",
+      "source": "./usage-band",
+      "description": "A band above the prompt showing usage for this chat, the 5h window and the week"
+    }
+  ]
+}

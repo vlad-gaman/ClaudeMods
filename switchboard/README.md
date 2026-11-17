@@ -2,6 +2,12 @@
 
 A side panel to switch each Claude Code mod and plugin on or off. It lists every installed mod with a switch, and for a mod that opens a pane, an eye to close or reopen that pane without disabling the mod.
 
+## Install
+
+```
+/plugin install switchboard --marketplace vlad-gaman/ClaudeMods
+```
+
 ## What you see
 
 - **Mod rows**: an icon, the mod's title, a one-line description, and its slash command. The icon is the mod's own `icon.svg`, else the Lucide icon named by `lucide` in its `plugin.json`, else one picked from words in its name (a puzzle piece when none fits). The terminal shows an emoji instead.

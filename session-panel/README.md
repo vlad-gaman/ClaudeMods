@@ -2,6 +2,12 @@
 
 A pane showing this session's connectors, skills, context files and to-do list, each in its own sub-panel. It opens with the session and updates as the session goes on.
 
+## Install
+
+```
+/plugin install session-panel --marketplace vlad-gaman/ClaudeMods
+```
+
 ## What you see
 
 - **To-do**: the session's title, then each to-do with its status (empty ring for `pending`, ring and dot for `in_progress`, filled ring for `completed`). It follows `update_plan`, `TodoWrite`, `TaskCreate` and `TaskUpdate`.

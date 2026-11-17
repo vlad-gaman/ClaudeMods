@@ -2,6 +2,12 @@
 
 Picks haiku, sonnet or opus once per session from the first prompt and routes plain subagents to cheaper models. Choosing once keeps the prompt cache warm.
 
+## Install
+
+```
+/plugin install model-router --marketplace vlad-gaman/ClaudeMods
+```
+
 ## What it does
 
 - **Locks one model per session.** The first prompt is classified: opus for "think hard", design, debug, review and similar starts, stack traces and long prompts; haiku for short lookups and chores; otherwise the default model. The choice shows on the status line and in a toast. A short follow-up ("yes", "go ahead") never picks.

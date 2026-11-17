@@ -2,6 +2,12 @@
 
 A band above the prompt showing usage for this chat, the 5h window and the week. Where a surface draws no band (VS Code, mobile), the same figures go to the status line instead.
 
+## Install
+
+```
+/plugin install usage-band --marketplace vlad-gaman/ClaudeMods
+```
+
 ## What you see
 
 - **Context**: how full the context window is, with tokens used/window. Measured against the compact window when one is set. Yellow from 25%, red above 40%.

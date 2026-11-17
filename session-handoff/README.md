@@ -2,6 +2,12 @@
 
 Writes a handoff file for the current session automatically on /handoff-session, shortly before the prompt cache goes cold, and when the context grows past a token threshold. The handoff summarises the session and holds a prompt to continue it in a new chat. Handoffs are saved in `~/.claude/handoffs/`. The panel of the last finished handoff comes back when the app restarts, until you press Close.
 
+## Install
+
+```
+/plugin install session-handoff --marketplace vlad-gaman/ClaudeMods
+```
+
 ## What you see
 
 A band above the prompt with six numbered steps: read the conversation, find the files used, list skills, tools and links, write the handoff, save it, check it. Each step shows a mark (`✓` done, `…` running, `✗` failed, `·` waiting) and a short detail. A failed step is marked and the band says so.

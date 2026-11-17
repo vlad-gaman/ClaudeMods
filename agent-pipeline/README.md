@@ -2,6 +2,12 @@
 
 Runs a vault ticket through test-first implementation, review and docs to a draft PR, with four subagents. It is a plugin of skills and agents plus a hooks module that guards them.
 
+## Install
+
+```
+/plugin install agent-pipeline --marketplace vlad-gaman/ClaudeMods
+```
+
 ## What it has
 
 - **Skills**: `pipeline` runs one ticket through tester, implementer, reviewer and documenter on a feature branch. `bootstrap` builds a repo's notes in the vault before its first run.
