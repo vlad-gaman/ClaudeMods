@@ -1,6 +1,6 @@
 {
   "name": "switchboard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A side panel to switch each Claude Code mod and plugin on or off",
   "types": "./types/index.d.ts",
   "lucide": "sliders-horizontal"

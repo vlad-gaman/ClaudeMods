@@ -1,6 +1,6 @@
 {
   "name": "usage-band",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A band above the prompt showing usage for this chat, the 5h window and the week",
   "types": "./types/index.d.ts",
   "lucide": "chart-column",
