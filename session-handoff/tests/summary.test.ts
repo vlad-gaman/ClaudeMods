@@ -29,9 +29,9 @@ test('summaryDetail says where the summary came from, by the answered flag', () 
   expect(summaryDetail(ANSWER as never)).toBe('summary by the model')
   expect(summaryDetail(NOT as never)).toBe('summary from last requests')
   expect(summaryDetail(null)).toBe('summary from last requests')
-  // Pinned as it is today: an answer with blank text is still "by the model",
-  // though the narrative falls back. Divergence noted in ticket 06.
-  expect(summaryDetail({ isAnswered: true, text: '' } as never)).toBe('summary by the model')
+  // An answer with blank text falls back to the last requests, so the detail says so.
+  expect(summaryDetail({ isAnswered: true, text: '' } as never)).toBe('summary from last requests')
+  expect(summaryDetail({ isAnswered: true, text: '   ' } as never)).toBe('summary from last requests')
   expect(summaryText({ isAnswered: true, text: '' } as never)).toBe(null)
 })
 

@@ -10,7 +10,7 @@ export const summaryText = (reply: Reply) => {
 
 // The detail of the write step: whether the summary came from the model.
 export const summaryDetail = (reply: Reply) =>
-  reply?.isAnswered ? 'summary by the model' : 'summary from last requests'
+  summaryText(reply) ? 'summary by the model' : 'summary from last requests'
 
 // The reply, or null when the deadline comes first or the model call fails.
 // On a tie the reply is listed first and wins.
