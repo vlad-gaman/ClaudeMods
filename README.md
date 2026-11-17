@@ -15,6 +15,13 @@ Eight mods for Claude Code. A mod is a plugin with a hooks module (see [GLOSSARY
 
 ## Install
 
+Clone the repo first:
+
+```bash
+git clone https://github.com/vlad-gaman/ClaudeMods.git
+cd ClaudeMods
+```
+
 Load a mod from its folder for one session (nothing is written to settings):
 
 ```bash
