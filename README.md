@@ -79,8 +79,8 @@ Change a README in the same commit as the behaviour it describes. Each README's 
 
 ## Releases
 
-A push to `main` releases every mod whose files changed. Every change to a mod bumps its `version` in `.claude-plugin/plugin.json`, so each change gets its own release. Each release is tagged `<mod>-v<version>`, takes the version from the mod's `.claude-plugin/plugin.json`, and attaches a zip of the mod (tracked files, without `tests/`). A mod that changed without a version bump has its tag already, so it is skipped with a warning in the run summary: bump the version to release it. Every change to a mod should bump its version: the **Check mod versions** workflow fails a pull request that changes a mod without bumping it.
+A push to `main` that changes at least one mod makes one release for all mods. It is tagged `release-<date>-<short sha>`, its notes list the mods that changed with their old and new versions, and it attaches one zip per mod (`<mod>-<version>.zip`, tracked files without `tests/`), every mod's zip each time. Every change to a mod bumps its `version` in `.claude-plugin/plugin.json`: the **Check mod versions** workflow fails a pull request that changes a mod without bumping it, and the release notes flag a mod that changed with the same version.
 
-To release every mod whose current version has no release yet (the first time, or after a missed run), run the **Release mods** workflow by hand with `all` ticked. The workflow is `.github/workflows/release.yml`; the logic is `.github/scripts/release.sh`, which `DRY_RUN=1` runs without creating anything.
+To make a release of the whole set without a change (the first time, or after a missed run), run the **Release mods** workflow by hand with `all` ticked. The workflow is `.github/workflows/release.yml`; the logic is `.github/scripts/release.sh`, which `DRY_RUN=1` runs without creating anything.
 
 To use a release: unzip it and load the folder with `claude --plugin-dir ./<mod>`.

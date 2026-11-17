@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
-# Releases each mod whose files changed in a push, as a GitHub release with a zip of the mod.
+# Makes one GitHub release for a push when at least one mod changed. The release holds a zip of every mod (the
+# whole set as of this commit) and its notes list the mods that changed, with their versions.
 #
 # Usage: release.sh <before-sha> <after-sha>   (before-sha of all zeros or empty: every mod counts as changed)
 # Env:   DRY_RUN=1  print what would be released, create nothing
 #        ALL=1      treat every mod as changed (manual run)
 #
-# A mod is a folder holding .claude-plugin/plugin.json. Its release is tagged <mod>-v<version>, the version read
-# from that file. A mod that changed without a version bump has its tag already, so it is skipped with a warning.
+# A mod is a folder holding .claude-plugin/plugin.json. The release tag is release-<date>-<short sha>. A mod that
+# changed without a version bump is flagged in the notes and a warning; the pull request check prevents it.
 set -euo pipefail
 
 before="${1:-}"
 after="${2:-HEAD}"
 zeros='0000000000000000000000000000000000000000'
 dist="$(mktemp -d)"
+version() { sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1; }
 
 if [ "${ALL:-}" = 1 ] || [ -z "$before" ] || [ "$before" = "$zeros" ] || ! git cat-file -e "$before^{commit}" 2>/dev/null; then
   all=1
@@ -20,49 +22,62 @@ else
   all=0
 fi
 
-released=()
-skipped=()
+changed=()
+notes="$dist/notes.md"
+: > "$notes"
 
 for manifest in */.claude-plugin/plugin.json; do
   [ -f "$manifest" ] || continue
   mod="${manifest%%/*}"
+  new="$(git show "$after:$manifest" | version)"
+  if [ -z "$new" ]; then
+    echo "::warning::$mod: no version in $manifest"
+    continue
+  fi
+
+  # Tracked files only, so local type stubs and node_modules stay out; tests are not part of the install.
+  git archive --format=zip -o "$dist/$mod-$new.zip" "$after" "$mod" ":(exclude)$mod/tests"
 
   if [ "$all" = 0 ] && git diff --quiet "$before" "$after" -- "$mod"; then
     continue
   fi
-
-  version="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$manifest" | head -1)"
-  if [ -z "$version" ]; then
-    echo "::warning::$mod: no version in $manifest, skipped"
-    skipped+=("$mod (no version)")
-    continue
-  fi
-  tag="$mod-v$version"
-
-  if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
-    echo "::warning::$mod changed but $tag already exists: bump the version in $manifest to release it"
-    skipped+=("$mod $version (already released)")
-    continue
-  fi
-
-  zip="$dist/$mod-$version.zip"
-  # Tracked files only, so local type stubs and node_modules stay out; tests are not part of the install.
-  git archive --format=zip -o "$zip" "$after" "$mod" ":(exclude)$mod/tests"
-
-  if [ "${DRY_RUN:-}" = 1 ]; then
-    echo "would release $tag ($(unzip -l "$zip" | tail -1 | awk '{print $2}') files)"
+  old=""
+  [ "$all" = 0 ] && old="$(git show "$before:$manifest" 2>/dev/null | version || true)"
+  if [ -n "$old" ] && [ "$old" = "$new" ]; then
+    echo "::warning::$mod changed but its version is still $new: bump it in $manifest"
+    changed+=("$mod $new (changed, version not bumped)")
+  elif [ -n "$old" ]; then
+    changed+=("$mod $old -> $new")
   else
-    gh release create "$tag" "$zip" --target "$after" --title "$mod $version" --generate-notes
+    changed+=("$mod $new")
   fi
-  released+=("$tag")
 done
 
+if [ ${#changed[@]} -eq 0 ]; then
+  echo "No mod changed, no release."
+  exit 0
+fi
+
+tag="release-$(date -u +%Y%m%d)-$(git rev-parse --short "$after")"
 {
-  echo "### Releases"
-  if [ ${#released[@]} -gt 0 ]; then printf -- '- released `%s`
-' "${released[@]}"; fi
-  if [ ${#skipped[@]} -gt 0 ]; then printf -- '- skipped %s
-' "${skipped[@]}"; fi
-  if [ ${#released[@]} -eq 0 ] && [ ${#skipped[@]} -eq 0 ]; then echo "- no mod changed"; fi
+  echo "Changed mods:"
+  echo
+  printf -- '- %s\n' "${changed[@]}"
+  echo
+  echo "Each zip is one mod. Unzip it and load the folder with \`claude --plugin-dir ./<mod>\`."
+} > "$notes"
+
+if [ "${DRY_RUN:-}" = 1 ]; then
+  echo "would release $tag with $(ls "$dist"/*.zip | wc -l) zips"
+  cat "$notes"
+elif gh release view "$tag" >/dev/null 2>&1; then
+  echo "::warning::$tag already exists, skipped"
+else
+  gh release create "$tag" "$dist"/*.zip --target "$after" --title "Mods $(date -u +%Y-%m-%d) ($(git rev-parse --short "$after"))" --notes-file "$notes" --generate-notes
+fi
+
+{
+  echo "### Release $tag"
+  printf -- '- %s\n' "${changed[@]}"
 } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 exit 0
