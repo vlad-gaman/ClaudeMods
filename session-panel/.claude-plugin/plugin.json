@@ -1,6 +1,6 @@
 {
   "name": "session-panel",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "author": { "name": "Vlad Gaman" },
   "description": "A pane showing this session's connectors, skills, context files and to-do list, each in its own sub-panel",
   "types": "./types/index.d.ts",
