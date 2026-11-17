@@ -352,7 +352,6 @@ export const register: Register = on => {
           key="status-bar"
           source={statusBarSvg(statusBar(statusCounts(items), STATUS_WIDTH).map(segment => ({ tone: TONE[segment.key], width: segment.width, isStriped: segment.key === 'none' })))}
           alt="status bar"
-          width={320}
           height={8}
         />
       ) : (
@@ -368,7 +367,9 @@ export const register: Register = on => {
       Svg ? (
         <Box key={`progress-${name}`} flexDirection="row" columnGap={1}>
           <Text dimColor>{name}</Text>
-          <Svg source={progressSvg(done, total, tone)} alt={`${name} progress`} width={120} height={6} />
+          <Box flexGrow={1}>
+            <Svg source={progressSvg(done, total, tone, true)} alt={`${name} progress`} height={6} />
+          </Box>
           <Text dimColor>{text}</Text>
         </Box>
       ) : (
@@ -469,9 +470,11 @@ export const register: Register = on => {
     const errorsCard =
       errors.length === 0 ? null : (
         <Box borderStyle="round" flexDirection="column">
-          <Box flexDirection="row" columnGap={1}>
-            <Button key="card-errors" plain label={`${isFolded('errors') ? '▸' : '▾'} CLI errors`} onPress={() => void toggle($, 'errors')} />
-            <Text dimColor>{String(errors.length)}</Text>
+          <Box flexDirection="row" columnGap={1} justifyContent={Svg ? 'space-between' : undefined}>
+            <Box flexDirection="row" columnGap={1}>
+              <Button key="card-errors" plain label={`${isFolded('errors') ? '▸' : '▾'} CLI errors`} onPress={() => void toggle($, 'errors')} />
+              <Text dimColor>{String(errors.length)}</Text>
+            </Box>
             <Button key="close-errors" plain label="Close" onPress={() => void update($, cliErrors, () => [])} />
           </Box>
           {isFolded('errors') ? null : (

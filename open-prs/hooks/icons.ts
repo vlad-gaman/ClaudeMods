@@ -33,6 +33,8 @@ export const iconSvg = (name: IconName, tone: string) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${HEX[tone] ?? HEX.inactive}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${PATHS[name]}</svg>`
 
 const W = 320
+/** A bar given no width takes the markup's own, up to the slot, so a full-width bar is marked wider than any pane. */
+const FULL = 2000
 const TRACK = '#374151'
 
 /** The status bar: one rounded segment per status in its tone, the no-PR one striped. `parts` are widths in any unit. */
@@ -50,12 +52,12 @@ export const statusBarSvg = (parts: { tone: string; width: number; isStriped: bo
     x += w + gap
     return rect
   })
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="8" viewBox="0 0 ${W} 8"><defs><pattern id="stripes" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="6" fill="${HEX.inactive}"/></pattern></defs>${rects.join('')}</svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${FULL}" height="8" viewBox="0 0 ${W} 8" preserveAspectRatio="none"><defs><pattern id="stripes" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="6" fill="${HEX.inactive}"/></pattern></defs>${rects.join('')}</svg>`
 }
 
 /** A thin progress bar: a track, filled by the share of `done` in `total`, in a tone. */
-export const progressSvg = (done: number, total: number, tone: string) => {
-  const w = 120
+export const progressSvg = (done: number, total: number, tone: string, isFull = false) => {
+  const w = isFull ? W : 120
   const filled = total > 0 ? (done / total) * w : 0
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="6" viewBox="0 0 ${w} 6"><rect width="${w}" height="6" rx="3" fill="${TRACK}"/>${filled > 0 ? `<rect width="${filled}" height="6" rx="3" fill="${HEX[tone] ?? HEX.inactive}"/>` : ''}</svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${isFull ? FULL : w}" height="6" viewBox="0 0 ${w} 6"${isFull ? ' preserveAspectRatio="none"' : ''}><rect width="${w}" height="6" rx="3" fill="${TRACK}"/>${filled > 0 ? `<rect width="${filled}" height="6" rx="3" fill="${HEX[tone] ?? HEX.inactive}"/>` : ''}</svg>`
 }
