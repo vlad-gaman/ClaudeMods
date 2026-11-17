@@ -1,6 +1,7 @@
 {
   "name": "model-router",
-  "version": "0.2.2",
+  "version": "0.2.3",
+  "author": { "name": "Vlad Gaman" },
   "description": "Picks haiku, sonnet or opus once per session from the first prompt and routes plain subagents to cheaper models",
   "types": "./types/index.d.ts",
   "lucide": "route",

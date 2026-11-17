@@ -1,6 +1,7 @@
 {
   "name": "brain-dump",
-  "version": "0.1.2",
+  "version": "0.1.3",
+  "author": { "name": "Vlad Gaman" },
   "description": "Turns a long, unstructured prompt into one structured prompt: it asks about points that conflict or are unclear, then runs the result only after you type go.",
   "types": "./types/index.d.ts",
   "lucide": "brain",

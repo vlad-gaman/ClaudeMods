@@ -1,6 +1,7 @@
 {
   "name": "switchboard",
-  "version": "0.2.1",
+  "version": "0.2.2",
+  "author": { "name": "Vlad Gaman" },
   "description": "A side panel to switch each Claude Code mod and plugin on or off",
   "types": "./types/index.d.ts",
   "lucide": "sliders-horizontal"
