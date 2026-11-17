@@ -21,7 +21,7 @@ export const GLYPH: Record<Status, string> = {
   required: '○',
   approved: '✓',
   draft: '◌',
-  none: '╱',
+  none: '⎇',
   open: '',
   merged: '',
   closed: '',
@@ -90,6 +90,10 @@ export const statusLine = (status: Status) => (status === 'none' ? LABEL.none : 
 export const unresolvedText = (threads: Threads) => (threads ? `◔ ${threads.total - threads.resolved} unresolved` : null)
 
 /** The legend item for a status: its glyph, count and short name. */
+export const legendLabel = ({ key, n }: { key: Counted; n: number }) => `${n} ${LEGEND[key]}`
+/** A status's name without its glyph, for the surface that draws an icon instead. */
+export const statusLabel = (status: Status) => LABEL[status]
+export const unresolvedLabel = (threads: Threads) => (threads ? `${threads.total - threads.resolved} unresolved` : null)
 export const legendText = ({ key, n }: { key: Counted; n: number }) => `${GLYPH[key]} ${n} ${LEGEND[key]}`
 
 /** How many items each counted status has, in card order, leaving out the empty ones. */
