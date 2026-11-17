@@ -14,6 +14,7 @@ export type OpenPr = {
   url: string
   review: ReviewState
   comments: number | null
+  threads: { total: number; resolved: number } | null
   run: Run | null
 }
 

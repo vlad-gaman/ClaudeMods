@@ -11,7 +11,8 @@ type AzPr = {
   status: string
   votes: { vote: number; isRequired: boolean | null; isGroup: boolean | null }[] | null
 }
-type AzThreads = { isDeleted: boolean | null; comments: { type: string | null; isDeleted: boolean | null }[] | null }[] | null
+type AzThreads = { isDeleted: boolean | null; status: string | null; comments: { type: string | null; isDeleted: boolean | null }[] | null }[] | null
+type AzCounts = { count: number; threads: { total: number; resolved: number }; at: number }
 type AzRun = { id: number; branch: string; status: string; result: string | null; name: string; definition: number; repo: string | null }
 
 type Azure = Extract<Remote, { host: 'azure' }>
@@ -22,7 +23,9 @@ const COUNT_MS = 10 * 60_000
 const COUNTS_PER_PASS = 12
 const AZ_PR_FIELDS =
   '[].{number:pullRequestId,title:title,author:createdBy.displayName,isDraft:isDraft,status:status,votes:reviewers[].{vote:vote,isRequired:isRequired,isGroup:isContainer}}'
-const AZ_THREADS = 'value[].{isDeleted:isDeleted,comments:comments[].{type:commentType,isDeleted:isDeleted}}'
+const AZ_THREADS = 'value[].{isDeleted:isDeleted,status:status,comments:comments[].{type:commentType,isDeleted:isDeleted}}'
+// Thread statuses that mean resolved; active, pending and a thread with no status are still open.
+const RESOLVED_STATUSES = ['fixed', 'closed', 'wontFix', 'byDesign']
 const AZ_RUN_FIELDS = '[].{id:id,branch:sourceBranch,status:status,result:result,name:definition.name,definition:definition.id,repo:repository.id}'
 
 const azState = (pr: AzPr): PrState =>
@@ -43,6 +46,12 @@ function azReview(pr: AzPr): ReviewState {
 const commentsIn = (threads: AzThreads) =>
   (threads ?? []).filter(thread => !thread.isDeleted).flatMap(thread => thread.comments ?? []).filter(c => c.type === 'text' && !c.isDeleted).length
 
+/** The review threads: live threads with a live text comment. System-only threads are not counted. */
+const threadsIn = (threads: AzThreads) => {
+  const review = (threads ?? []).filter(thread => !thread.isDeleted && (thread.comments ?? []).some(c => c.type === 'text' && !c.isDeleted))
+  return { total: review.length, resolved: review.filter(thread => RESOLVED_STATUSES.includes(thread.status ?? '')).length }
+}
+
 /** The organisation URL: the base of the `az --org` argument and of every web link. */
 const azureOrg = (remote: Azure) => `https://dev.azure.com/${remote.org}`
 
@@ -51,7 +60,7 @@ async function fetchAzure(
   remote: Azure,
   { branch, previous }: FetchContext,
   repoIds: Map<string, string>,
-  commentCounts: Map<string, { count: number; at: number }>,
+  commentCounts: Map<string, AzCounts>,
 ): Promise<Snapshot> {
   const org = azureOrg(remote)
   const scope = ['--org', org, '--project', remote.project, '-o', 'json']
@@ -83,6 +92,7 @@ async function fetchAzure(
     url: `${git}/pullrequest/${pr.number}`,
     review: azReview(pr),
     comments: commentCounts.get(`${git}/pullrequest/${pr.number}`)?.count ?? previousPr(previous, url, pr.number)?.comments ?? null,
+    threads: commentCounts.get(`${git}/pullrequest/${pr.number}`)?.threads ?? previousPr(previous, url, pr.number)?.threads ?? null,
     run: (known && runOf(`refs/pull/${pr.number}/merge`, known)) || (previousPr(previous, url, pr.number)?.run ?? null),
   })
   const branchPr = mine && 'data' in mine ? mine.data[0] : undefined
@@ -99,7 +109,7 @@ async function fetchAzure(
  */
 export function azureProvider(): Provider {
   const repoIds = new Map<string, string>()
-  const commentCounts = new Map<string, { count: number; at: number }>()
+  const commentCounts = new Map<string, AzCounts>()
   return {
     cli: 'az',
     async fetch(port, remote, context) {
@@ -131,9 +141,9 @@ export function azureProvider(): Provider {
         const at = await port.now()
         results.forEach((result, j) => {
           const pr = batch[j]
-          if (pr && 'data' in result && result.data) commentCounts.set(pr.url, { count: commentsIn(result.data), at })
+          if (pr && 'data' in result && result.data) commentCounts.set(pr.url, { count: commentsIn(result.data), threads: threadsIn(result.data), at })
         })
-        await publish(pr => ({ ...pr, comments: commentCounts.get(pr.url)?.count ?? pr.comments }))
+        await publish(pr => ({ ...pr, comments: commentCounts.get(pr.url)?.count ?? pr.comments, threads: commentCounts.get(pr.url)?.threads ?? pr.threads }))
       }
     },
   }

@@ -1,7 +1,7 @@
 # Count resolved and unresolved review threads per PR
 
 Type: task
-Status: ready-for-agent
+Status: resolved
 Blocked by:
 
 ## Problem
@@ -19,3 +19,6 @@ Each provider reports, per PR, total and resolved review threads. GitHub: GraphQ
 - Hook tests still pass; `claude plugin test .` in `open-prs` is green.
 
 ## Comments
+
+- Done. `OpenPr.threads: { total; resolved } | null`. GitHub reads `reviewThreads(first: 100)` inside the existing comment-count query, so no extra call; the resolved count covers the first 100 threads of a PR (a PR with more is undercounted). Azure reads the thread `status` in the existing threads call in `countComments`: review threads are live threads with a live text comment; `fixed`, `closed`, `wontFix`, `byDesign` count as resolved, anything else (active, pending, no status) as unresolved. A failed call keeps the last counts, and a PR never counted stays `null`.
+- Tests: 127 pass (123 before, plus 4 new GitHub and Azure cases; the existing thread-count test and the GitHub maps test now also assert `threads`).

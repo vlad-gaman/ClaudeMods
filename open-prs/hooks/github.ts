@@ -25,7 +25,15 @@ type GhOpenPr = {
   latestReviews: { state: string }[] | null
   statusCheckRollup: GhCheck[] | null
 }
-type GhCommentCounts = { data: { repository: { pullRequests: { nodes: { number: number; totalCommentsCount: number | null }[] } } | null } }
+type GhCommentCounts = {
+  data: {
+    repository: {
+      pullRequests: {
+        nodes: { number: number; totalCommentsCount: number | null; reviewThreads?: { totalCount: number; nodes: { isResolved: boolean }[] } | null }[]
+      }
+    } | null
+  }
+}
 type GhBranchPr = { number: number; title: string; state: 'OPEN' | 'MERGED' | 'CLOSED'; isDraft: boolean }
 type GhRefChecks = {
   data: { repository: { ref: { target: { statusCheckRollup?: { contexts: { nodes: GhCheck[] } } | null } } | null } | null }
@@ -35,7 +43,9 @@ const ADO_BUILD = /\/_build\/results\?buildId=\d+$/
 const IGNORED_CONCLUSIONS = ['NEUTRAL', 'SKIPPED', 'STALE']
 const COMMENT_COUNTS = `query($owner: String!, $name: String!) {
   repository(owner: $owner, name: $name) {
-    pullRequests(states: OPEN, first: 100, orderBy: { field: CREATED_AT, direction: DESC }) { nodes { number totalCommentsCount } }
+    pullRequests(states: OPEN, first: 100, orderBy: { field: CREATED_AT, direction: DESC }) {
+      nodes { number totalCommentsCount reviewThreads(first: 100) { totalCount nodes { isResolved } } }
+    }
   }
 }`
 const REF_CHECKS = `query($owner: String!, $name: String!, $ref: String!) {
@@ -98,12 +108,13 @@ async function fetchGitHub(port: Port, slug: string, { branch, previous }: Fetch
       : null,
     cli<GhCommentCounts>(port, ['gh', 'api', 'graphql', '-f', `query=${COMMENT_COUNTS}`, '-f', `owner=${owner}`, '-f', `name=${name}`]),
   ])
-  const commentsOf = (number: number) =>
-    'data' in counts
-      ? (counts.data.data.repository?.pullRequests.nodes.find(node => node.number === number)?.totalCommentsCount ??
-        previousPr(previous, url, number)?.comments ??
-        null)
-      : (previousPr(previous, url, number)?.comments ?? null)
+  const countNode = (number: number) => ('data' in counts ? counts.data.data.repository?.pullRequests.nodes.find(node => node.number === number) : undefined)
+  const commentsOf = (number: number) => countNode(number)?.totalCommentsCount ?? previousPr(previous, url, number)?.comments ?? null
+  // The resolved count reads the first 100 threads of the PR, the most one query returns.
+  const threadsOf = (number: number) => {
+    const threads = countNode(number)?.reviewThreads
+    return threads ? { total: threads.totalCount, resolved: threads.nodes.filter(thread => thread.isResolved).length } : (previousPr(previous, url, number)?.threads ?? null)
+  }
   const toOpenPr = (pr: GhOpenPr): OpenPr => ({
     number: pr.number,
     title: pr.title,
@@ -112,6 +123,7 @@ async function fetchGitHub(port: Port, slug: string, { branch, previous }: Fetch
     url: pr.url,
     review: ghReview(pr),
     comments: commentsOf(pr.number),
+    threads: threadsOf(pr.number),
     run: pipelineOf(pr.statusCheckRollup, slug),
   })
   return {

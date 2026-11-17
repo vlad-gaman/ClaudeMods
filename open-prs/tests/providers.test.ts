@@ -47,6 +47,19 @@ const pr = (number: number, extra: Record<string, unknown> = {}) => ({
 const counts = (...nodes: [number, number][]) => ({
   data: { repository: { pullRequests: { nodes: nodes.map(([number, totalCommentsCount]) => ({ number, totalCommentsCount })) } } },
 })
+const threadCounts = (...nodes: [number, number, boolean[]][]) => ({
+  data: {
+    repository: {
+      pullRequests: {
+        nodes: nodes.map(([number, totalCommentsCount, resolved]) => ({
+          number,
+          totalCommentsCount,
+          reviewThreads: { totalCount: resolved.length, nodes: resolved.map(isResolved => ({ isResolved })) },
+        })),
+      },
+    },
+  },
+})
 const QUERY = expect.stringMatching(/^query=/)
 
 describe('GitHub provider', () => {
@@ -109,6 +122,7 @@ describe('GitHub provider', () => {
           url: 'https://github.com/esendex/api/pull/12',
           review: 'approved',
           comments: 3,
+          threads: null,
           run: { name: 'api-ci', state: 'failed', url: BUILD },
         },
       ],
@@ -129,6 +143,36 @@ describe('GitHub provider', () => {
 
     // Assert
     expect(snapshot.repo?.prs[0]?.comments).toBe(5)
+  })
+
+  test('counts the resolved and total review threads of each PR', async () => {
+    // Arrange
+    const { port } = stubPort([ok([pr(12)]), fail(NO_PR), ok({ data: { repository: { ref: null } } }), ok(threadCounts([12, 3, [true, false, true]]))])
+
+    // Act
+    const snapshot = await githubProvider().fetch(port, GITHUB, BRANCH)
+
+    // Assert
+    expect(snapshot.repo?.prs[0]?.threads).toEqual({ total: 3, resolved: 2 })
+  })
+
+  test('keeps the last thread counts when the count call fails, and is null when there were none', async () => {
+    // Arrange
+    const previous: RepoPrs = {
+      slug: 'esendex/api',
+      url: 'https://github.com/esendex/api/pulls',
+      prs: [{ number: 12, title: 'PR 12', author: 'alice', isDraft: false, url: 'x', review: 'required', comments: 5, threads: { total: 4, resolved: 1 }, run: null }],
+    }
+    const kept = stubPort([ok([pr(12)]), fail(NO_PR), ok({ data: { repository: { ref: null } } }), fail('HTTP 502')])
+    const never = stubPort([ok([pr(12)]), fail(NO_PR), ok({ data: { repository: { ref: null } } }), fail('HTTP 502')])
+
+    // Act
+    const withPrevious = await githubProvider().fetch(kept.port, GITHUB, { branch: 'feature', previous })
+    const withoutPrevious = await githubProvider().fetch(never.port, GITHUB, BRANCH)
+
+    // Assert
+    expect(withPrevious.repo?.prs[0]?.threads).toEqual({ total: 4, resolved: 1 })
+    expect(withoutPrevious.repo?.prs[0]?.threads).toBeNull()
   })
 
   test('a gh call that cannot run is unknown: the repo is left as it was', async () => {
@@ -229,6 +273,58 @@ describe('Azure DevOps provider', () => {
       ],
     ])
     expect(published.map(pr => pr.comments)).toEqual([1])
+    expect(published.map(pr => pr.threads)).toEqual([{ total: 1, resolved: 0 }])
+  })
+
+  test('counts review threads by status, leaving out deleted and system-only threads', async () => {
+    // Arrange
+    const threads = [
+      { isDeleted: false, status: 'active', comments: [{ type: 'text', isDeleted: false }] },
+      { isDeleted: false, status: 'fixed', comments: [{ type: 'text', isDeleted: false }, { type: 'text', isDeleted: false }] },
+      { isDeleted: false, status: 'closed', comments: [{ type: 'system', isDeleted: false }] },
+      { isDeleted: true, status: 'active', comments: [{ type: 'text', isDeleted: false }] },
+      { isDeleted: false, status: 'byDesign', comments: [{ type: 'text', isDeleted: false }] },
+      { isDeleted: false, status: 'wontFix', comments: [{ type: 'text', isDeleted: false }] },
+    ]
+    const provider = azureProvider()
+    const listing = stubPort([ok([azPr(7)]), ok([]), ok('repo-id')])
+    const shown = (await provider.fetch(listing.port, AZURE, { branch: null, previous: null })).repo
+    if (!shown) throw new Error('expected a repo')
+    const shownPr = shown.prs[0]
+    if (!shownPr) throw new Error('expected a PR')
+    const published: OpenPr[] = []
+
+    // Act
+    await provider.countComments?.(stubPort([ok(threads)]).port, AZURE, shown, async change => {
+      published.push(change(shownPr))
+    })
+
+    // Assert
+    expect(published.map(pr => pr.threads)).toEqual([{ total: 4, resolved: 3 }])
+    expect(published.map(pr => pr.comments)).toEqual([5])
+  })
+
+  test('a failed threads call keeps the last thread counts', async () => {
+    // Arrange
+    const provider = azureProvider()
+    const listing = stubPort([ok([azPr(7)]), ok([]), ok('repo-id')])
+    const shown = (await provider.fetch(listing.port, AZURE, { branch: null, previous: null })).repo
+    if (!shown) throw new Error('expected a repo')
+    const shownPr = shown.prs[0]
+    if (!shownPr) throw new Error('expected a PR')
+    const published: OpenPr[] = []
+    const first = stubPort([ok([{ isDeleted: false, status: 'active', comments: [{ type: 'text', isDeleted: false }] }])], 0)
+    await provider.countComments?.(first.port, AZURE, shown, async change => {
+      published.push(change(shownPr))
+    })
+
+    // Act: ten minutes later the threads call fails
+    await provider.countComments?.(stubPort([fail('TF401019')], 600_000).port, AZURE, shown, async change => {
+      published.push(change(shownPr))
+    })
+
+    // Assert
+    expect(published.map(pr => pr.threads)).toEqual([{ total: 1, resolved: 0 }, { total: 1, resolved: 0 }])
   })
 
   test('a Github remote is refused', async () => {
