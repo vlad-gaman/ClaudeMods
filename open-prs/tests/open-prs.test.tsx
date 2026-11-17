@@ -1311,7 +1311,7 @@ describe('cards', () => {
     expect(texts.filter(text => text === 'no PR')).toHaveLength(2)
   })
 
-  test('a branch without a PR gets the striped no-PR segment and its legend', async ($, on) => {
+  test('a branch without a PR gets the shaded no-PR segment and its legend', async ($, on) => {
     // Arrange
     const { clock } = engine(on, { view: () => fail(NO_PR) })
 
@@ -1320,13 +1320,13 @@ describe('cards', () => {
 
     // Assert
     const { texts } = await pane($)
-    expect(texts).toContain('╱ 1 no PR')
-    expect(texts).toContain('╱'.repeat(40))
+    expect(texts).toContain('⎇ 1 no PR')
+    expect(texts).toContain('▒'.repeat(40))
     const ui = await mountPane($)
-    const stripes = (await ui.findAll({ type: 'Text' })).find(text => text.text === '╱'.repeat(40))
+    const stripes = (await ui.findAll({ type: 'Text' })).find(text => text.text === '▒'.repeat(40))
     await ui.unmount()
-    expect(stripes?.props.backgroundColor).toBe('inactive')
-    expect(stripes?.props.color).toBeUndefined()
+    expect(stripes?.props.backgroundColor).toBeUndefined()
+    expect(stripes?.props.color).toBe('inactive')
   })
 
   test('a card collapses and expands from its header, and the choice holds on a new mount', async ($, on) => {

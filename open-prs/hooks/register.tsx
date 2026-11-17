@@ -305,8 +305,8 @@ export const register: Register = on => {
     const statusRow = (items: Counted[]) => (
       <Box flexDirection="row">
         {statusBar(statusCounts(items), STATUS_WIDTH).map(segment => (
-          <Text key={`segment-${segment.key}`} color={segment.key === 'none' ? undefined : TONE[segment.key]} backgroundColor={segment.key === 'none' ? 'inactive' : undefined}>
-            {(segment.key === 'none' ? '╱' : '█').repeat(segment.width)}
+          <Text key={`segment-${segment.key}`} color={TONE[segment.key]}>
+            {(segment.key === 'none' ? '▒' : '█').repeat(segment.width)}
           </Text>
         ))}
       </Box>

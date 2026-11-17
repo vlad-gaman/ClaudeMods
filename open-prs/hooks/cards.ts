@@ -21,7 +21,7 @@ export const GLYPH: Record<Status, string> = {
   required: '○',
   approved: '✓',
   draft: '◌',
-  none: '╱',
+  none: '⎇',
   open: '',
   merged: '',
   closed: '',
