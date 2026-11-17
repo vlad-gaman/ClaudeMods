@@ -31,7 +31,14 @@ declare module 'claude-code' {
     'open-prs': {
       repo: RepoPrs | null
       branchPr: BranchPr | null
-      branchRun: Run | null
+      /** The ids of the cards the person has collapsed: `session`, `other`, `errors`. */
+      collapsed: string[]
+      /** The latest runs of the session's own branch, newest first. */
+      branchRuns: Run[]
+      /** This session's branches, with their worktree folder and the open PR on each (null when none). */
+      sessionBranches: { branch: string; path: string | null; prNumber: number | null }[]
+      /** The failed gh and az calls the CLI errors card lists, newest last. */
+      cliErrors: { command: string; exitCode: number | null; isTimeout: boolean; at: number; message: string }[]
       isDismissed: boolean
       isLoaded: boolean
       failedCli: 'gh' | 'az' | null

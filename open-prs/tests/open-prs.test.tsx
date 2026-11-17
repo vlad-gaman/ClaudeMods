@@ -128,8 +128,9 @@ async function start($: Engine, clock: ReturnType<typeof mock.clock>) {
   await clock.settle()
 }
 
-const head = (count: number | string) => ['Pull requests', `${count} open`]
-const NO_RUNS = ['Pipelines', 'No runs found.']
+/** A status bar segment of `n` cells: every status segment is drawn with the same glyph. */
+const bars = (n: number) => '█'.repeat(n)
+const CHIP = /^\S+ ci(-\d)?$/
 
 const mountPane = ($: Engine, surface: (typeof SURFACES)[number] = 'desktop') =>
   $.ui.mount({
@@ -182,9 +183,13 @@ describe('pane', () => {
 
     // Assert
     for (const surface of SURFACES) {
-      const { texts, links } = await pane($, surface)
-      expect(texts).toEqual([...head(2), 'This branch: #12 open', 'PR 12', 'alice', '← this branch', REQUIRED, 'PR 15', 'ghost · draft', REQUIRED, ...NO_RUNS])
+      const { texts, links, buttons } = await pane($, surface)
+      expect(texts).toEqual([
+        '1 branch', bars(40), '○ 1 review', 'PR 12', '⎇ feature', '/repo', REQUIRED,
+        '1 open', bars(40), '◌ 1 draft', '◌ draft', 'PR 15', 'ghost',
+      ])
       expect(links).toEqual(['esendex/api', '#12', '#15'])
+      expect(buttons).toEqual(['Refresh', '▾ This session', '▾ Other open PRs'])
     }
   })
 
@@ -198,13 +203,11 @@ describe('pane', () => {
 
     // Assert
     const { texts, links } = await pane($)
-    expect(texts.slice(0, 2)).toEqual(head('50+'))
+    expect(texts).toContain('50+ open')
     expect(links).toContain('#50')
     expect(links.filter(link => /^#\d+$/.test(link))).toHaveLength(50)
     expect(links).not.toContain('#51')
-    const runs = texts.slice(texts.indexOf('Pipelines')).filter(text => /^#\d+$/.test(text))
-    expect(runs).toHaveLength(50)
-    expect(runs).not.toContain('#51')
+    expect(texts.filter(text => text === '✓ ci')).toHaveLength(50)
   })
 
   test('says it is loading until the first answer', async ($, on) => {
@@ -218,7 +221,7 @@ describe('pane', () => {
     expect((await pane($)).texts).toEqual(['Loading…'])
   })
 
-  test('shows the branch PR state without a row when it is not open', async ($, on) => {
+  test("shows the session branch's PR state when it is not open", async ($, on) => {
     // Arrange
     const { clock } = engine(on, { list: () => ok([]), view: () => ok({ ...BRANCH, state: 'MERGED' }) })
 
@@ -226,10 +229,12 @@ describe('pane', () => {
     await start($, clock)
 
     // Assert
-    expect((await pane($)).texts).toEqual([...head(0), 'This branch: #12 merged', ...NO_RUNS])
+    const { texts } = await pane($)
+    expect(texts).toContain('merged')
+    expect(texts).toContain('0 open')
   })
 
-  test('marks a draft branch PR as draft', async ($, on) => {
+  test('marks a draft session branch PR as draft', async ($, on) => {
     // Arrange
     const { clock } = engine(on, { list: () => ok([]), view: () => ok({ ...BRANCH, isDraft: true }) })
 
@@ -237,7 +242,7 @@ describe('pane', () => {
     await start($, clock)
 
     // Assert
-    expect((await pane($)).texts).toContain('This branch: #12 draft')
+    expect((await pane($)).texts).toContain('◌ draft')
   })
 
   test('says so when gh is not installed', async ($, on) => {
@@ -252,7 +257,9 @@ describe('pane', () => {
 
     // Assert
     expect(opens).toEqual([])
-    expect((await pane($)).texts).toEqual([GH_DOWN])
+    const { texts, buttons } = await pane($)
+    expect(texts[0]).toBe(GH_DOWN)
+    expect(buttons).toContain('▾ CLI errors')
   })
 
   test('says so when gh answers something other than JSON', async ($, on) => {
@@ -274,7 +281,7 @@ describe('pane', () => {
     await start($, clock)
 
     // Assert
-    expect((await pane($)).texts).toEqual([AZ_DOWN])
+    expect((await pane($)).texts[0]).toBe(AZ_DOWN)
   })
 
   test('retries a failed first load after 30 seconds and shows the PRs', async ($, on) => {
@@ -293,7 +300,7 @@ describe('pane', () => {
     // Assert
     expect(early).toBe(1)
     expect(callsTo('list').length).toBe(2)
-    expect((await pane($)).texts.slice(0, 2)).toEqual(head(2))
+    expect((await pane($)).texts).toContain('1 open')
   })
 
   test('retries once quickly, then waits for the regular refresh', async ($, on) => {
@@ -311,7 +318,7 @@ describe('pane', () => {
     // Assert
     expect(beforeTick).toBe(2)
     expect(callsTo('list').length).toBe(3)
-    expect((await pane($)).texts).toEqual([GH_DOWN])
+    expect((await pane($)).texts[0]).toBe(GH_DOWN)
   })
 
   test('the refresh button fetches the PRs again', async ($, on) => {
@@ -325,7 +332,7 @@ describe('pane', () => {
 
     // Assert
     expect(callsTo('list').length).toBe(2)
-    expect((await pane($)).texts.slice(0, 2)).toEqual(head(1))
+    expect((await pane($)).texts).toContain('1 open')
   })
 
   test('the refresh button loads the PRs after a failed call', async ($, on) => {
@@ -339,8 +346,8 @@ describe('pane', () => {
     await press($, clock, 'refresh')
 
     // Assert
-    expect(failedPane.buttons).toEqual(['Refresh'])
-    expect((await pane($)).texts.slice(0, 2)).toEqual(head(2))
+    expect(failedPane.buttons).toContain('Refresh')
+    expect((await pane($)).texts).toContain('1 open')
   })
 
   test('a successful refresh cancels the pending quick retry', async ($, on) => {
@@ -479,10 +486,10 @@ describe('GitHub pipelines', () => {
     await start($, clock)
 
     // Assert
-    const { texts, links, hrefs } = await pane($)
-    expect(texts).toEqual([...head(1), 'PR 12', 'alice', REQUIRED, 'Pipelines', '#12', '● failed'])
-    expect(links).toEqual(['esendex/api', '#12', 'api-ci'])
-    expect(hrefs[2]).toBe(BUILD)
+    const { texts, links } = await pane($)
+    expect(texts).toContain('✗ api-ci')
+    expect(texts.some(text => text.endsWith('SonarCloud') || text.endsWith('Lint'))).toBe(false)
+    expect(links).toEqual(['esendex/api', '#12'])
   })
 
   test("falls back to the repo's own GitHub Actions workflow", async ($, on) => {
@@ -498,8 +505,8 @@ describe('GitHub pipelines', () => {
 
     // Assert
     const { texts, links } = await pane($)
-    expect(texts).toEqual([...head(1), 'PR 12', 'alice', REQUIRED, 'Pipelines', '#12', '● running'])
-    expect(links).toEqual(['esendex/api', '#12', 'CI'])
+    expect(texts).toContain('◐ CI')
+    expect(links).toEqual(['esendex/api', '#12'])
   })
 
   test('lists the branch run first, then each PR that has a run, in PR order', async ($, on) => {
@@ -516,10 +523,7 @@ describe('GitHub pipelines', () => {
     await start($, clock)
 
     // Assert
-    expect((await pane($)).texts).toEqual([
-      ...head(3), 'PR 12', 'alice', REQUIRED, 'PR 15', 'alice', REQUIRED, 'PR 16', 'alice', REQUIRED,
-      'Pipelines', 'This branch', '● running', '#12', '● failed', '#16', '● succeeded',
-    ])
+    expect((await pane($)).texts.filter(text => CHIP.test(text))).toEqual(['◐ ci', '✗ ci', '✓ ci'])
   })
 
   test('shows no pipeline for a PR whose checks are elsewhere', async ($, on) => {
@@ -531,17 +535,19 @@ describe('GitHub pipelines', () => {
     await start($, clock)
 
     // Assert
-    expect((await pane($)).texts).toEqual([...head(1), 'PR 12', 'alice', REQUIRED, ...NO_RUNS])
+    const { texts } = await pane($)
+    expect(texts).toContain('PR 12')
+    expect(texts.filter(text => CHIP.test(text))).toEqual([])
   })
 
   const STATES: [string, Check, string | null][] = [
-    ['a passed check', check('ci', 'SUCCESS', BUILD), '● succeeded'],
-    ['a cancelled check', check('ci', 'CANCELLED', BUILD), '● cancelled'],
-    ['a timed-out check', check('ci', 'TIMED_OUT', BUILD), '● failed'],
-    ['a queued check', check('ci', null, BUILD, 'QUEUED'), '● queued'],
+    ['a passed check', check('ci', 'SUCCESS', BUILD), '✓ ci'],
+    ['a cancelled check', check('ci', 'CANCELLED', BUILD), '– ci'],
+    ['a timed-out check', check('ci', 'TIMED_OUT', BUILD), '✗ ci'],
+    ['a queued check', check('ci', null, BUILD, 'QUEUED'), '○ ci'],
     ['a skipped check', check('ci', 'SKIPPED', BUILD), null],
-    ['a pending status', { __typename: 'StatusContext', context: 'ci', state: 'PENDING', targetUrl: BUILD }, '● running'],
-    ['an errored status', { __typename: 'StatusContext', context: 'ci', state: 'ERROR', targetUrl: BUILD }, '● failed'],
+    ['a pending status', { __typename: 'StatusContext', context: 'ci', state: 'PENDING', targetUrl: BUILD }, '◐ ci'],
+    ['an errored status', { __typename: 'StatusContext', context: 'ci', state: 'ERROR', targetUrl: BUILD }, '✗ ci'],
   ]
   for (const [name, node, shown] of STATES) {
     test(`the branch pipeline shows ${name} as ${shown ?? 'nothing'}`, async ($, on) => {
@@ -553,7 +559,7 @@ describe('GitHub pipelines', () => {
 
       // Assert
       const { texts } = await pane($)
-      expect(texts).toEqual(shown ? [...head(0), 'Pipelines', 'This branch', shown] : [...head(0), ...NO_RUNS])
+      expect(texts.filter(text => CHIP.test(text))).toEqual(shown ? [shown] : [])
     })
   }
 
@@ -566,7 +572,9 @@ describe('GitHub pipelines', () => {
     await start($, clock)
 
     // Assert
-    expect((await pane($)).texts).toEqual([...head(0), ...NO_RUNS])
+    const { texts } = await pane($)
+    expect(texts).toContain('0 open')
+    expect(texts.filter(text => CHIP.test(text))).toEqual([])
   })
 
   test('a detached HEAD skips the branch checks', async ($, on) => {
@@ -593,7 +601,7 @@ describe('GitHub pipelines', () => {
 
     // Assert
     expect(callsTo('checks').length).toBeGreaterThan(before)
-    expect((await pane($)).texts).toContain('● succeeded')
+    expect((await pane($)).texts).toContain('✓ ci')
   })
 
   test('the branch pipeline goes once the branch is no longer on GitHub', async ($, on) => {
@@ -607,7 +615,7 @@ describe('GitHub pipelines', () => {
     await clock.advance(3 * 60_000)
 
     // Assert
-    expect((await pane($)).texts).toEqual([...head(0), ...NO_RUNS])
+    expect((await pane($)).texts.filter(text => CHIP.test(text))).toEqual([])
   })
 })
 
@@ -630,29 +638,27 @@ describe('GitHub reviews and comments', () => {
       await start($, clock)
 
       // Assert
-      expect((await pane($)).texts).toEqual([...head(1), 'PR 12', 'alice', shown, ...NO_RUNS])
+      expect((await pane($)).texts).toContain(shown)
     })
   }
 
-  test("shows each PR's comment count beside its review state", async ($, on) => {
+  test("shows each PR's comment count beside its author", async ($, on) => {
     // Arrange
-    const { clock, callsTo } = engine(on, { counts: () => ok(counts([12, 3], [15, 1])) })
+    const { clock, callsTo } = engine(on, { counts: () => ok(counts([12, 3], [15, 1])), view: () => fail(NO_PR) })
 
     // Act
     await start($, clock)
 
     // Assert
     const { texts } = await pane($)
-    expect(texts).toEqual([
-      ...head(2), 'This branch: #12 open', 'PR 12', 'alice', '← this branch', REQUIRED, '3 comments',
-      'PR 15', 'ghost · draft', REQUIRED, '1 comment', ...NO_RUNS,
-    ])
+    expect(texts).toContain('alice · 3 comments')
+    expect(texts).toContain('ghost · 1 comment')
     expect(callsTo('counts')[0]).toEqual(expect.arrayContaining(['owner=esendex', 'name=api']))
   })
 
   test('a failed count call keeps the last counts', async ($, on) => {
     // Arrange
-    const { clock, cli, callsTo } = engine(on, { counts: () => ok(counts([12, 3])) })
+    const { clock, cli, callsTo } = engine(on, { counts: () => ok(counts([12, 3])), view: () => fail(NO_PR) })
     await start($, clock)
     cli.counts = () => fail('HTTP 502')
     const before = callsTo('counts').length
@@ -662,12 +668,12 @@ describe('GitHub reviews and comments', () => {
 
     // Assert
     expect(callsTo('counts').length).toBeGreaterThan(before)
-    expect((await pane($)).texts).toContain('3 comments')
+    expect((await pane($)).texts).toContain('alice · 3 comments')
   })
 
   test('a new count replaces the last one', async ($, on) => {
     // Arrange
-    const { clock, cli } = engine(on, { counts: () => ok(counts([12, 3])) })
+    const { clock, cli } = engine(on, { counts: () => ok(counts([12, 3])), view: () => fail(NO_PR) })
     await start($, clock)
     cli.counts = () => ok(counts([12, 5]))
 
@@ -676,13 +682,13 @@ describe('GitHub reviews and comments', () => {
 
     // Assert
     const { texts } = await pane($)
-    expect(texts).toContain('5 comments')
-    expect(texts).not.toContain('3 comments')
+    expect(texts).toContain('alice · 5 comments')
+    expect(texts).not.toContain('alice · 3 comments')
   })
 
   test('a PR missing from the counts keeps its last count', async ($, on) => {
     // Arrange
-    const { clock, cli } = engine(on, { counts: () => ok(counts([12, 3])) })
+    const { clock, cli } = engine(on, { counts: () => ok(counts([12, 3])), view: () => fail(NO_PR) })
     await start($, clock)
     cli.counts = () => ok(counts())
 
@@ -690,7 +696,7 @@ describe('GitHub reviews and comments', () => {
     await clock.advance(3 * 60_000)
 
     // Assert
-    expect((await pane($)).texts).toContain('3 comments')
+    expect((await pane($)).texts).toContain('alice · 3 comments')
   })
 })
 
@@ -720,7 +726,7 @@ describe('Azure DevOps reviews and comments', () => {
       await start($, clock)
 
       // Assert
-      expect((await pane($)).texts).toEqual([...head(1), 'PR 7', 'Bob', shown, ...NO_RUNS])
+      expect((await pane($)).texts).toContain(shown)
     })
   }
 
@@ -732,7 +738,7 @@ describe('Azure DevOps reviews and comments', () => {
     await start($, clock)
 
     // Assert
-    expect((await pane($)).texts).toEqual([...head(1), 'PR 7', 'Bob', REQUIRED, '1 comment', ...NO_RUNS])
+    expect((await pane($)).texts).toContain('Bob · 1 comment')
     expect(callsTo('azThreads')[0]).toEqual(expect.arrayContaining(['project=Titan Accounts', 'repositoryId=api', 'pullRequestId=7']))
   })
 
@@ -749,7 +755,7 @@ describe('Azure DevOps reviews and comments', () => {
     // Assert
     expect(early).toBe(1)
     expect(callsTo('azThreads')).toHaveLength(2)
-    expect((await pane($)).texts).toContain('1 comment')
+    expect((await pane($)).texts).toContain('Bob · 1 comment')
   })
 
   test('asks for at most twelve counts per pass, then the rest', async ($, on) => {
@@ -765,7 +771,7 @@ describe('Azure DevOps reviews and comments', () => {
     // Assert
     expect(first).toEqual(ids(1, 12))
     expect(callsTo('azThreads').map(prOf).slice(12)).toEqual(ids(13, 15))
-    expect((await pane($)).texts.filter(text => text === '0 comments')).toHaveLength(15)
+    expect((await pane($)).texts.filter(text => text === 'Bob · 0 comments')).toHaveLength(15)
   })
 
   test('counts never-counted PRs first, then the oldest counts', async ($, on) => {
@@ -802,9 +808,9 @@ describe('Azure DevOps reviews and comments', () => {
       await clock.advance(3 * 60_000)
 
       // Assert
-      expect(kept).toContain('1 comment')
+      expect(kept).toContain('Bob · 1 comment')
       expect(callsTo('azThreads')).toHaveLength(3)
-      expect((await pane($)).texts).toContain('2 comments')
+      expect((await pane($)).texts).toContain('Bob · 2 comments')
     })
 
     test(`${name} threads call shows no count and is asked again next refresh`, async ($, on) => {
@@ -818,9 +824,10 @@ describe('Azure DevOps reviews and comments', () => {
       await clock.advance(3 * 60_000)
 
       // Assert
-      expect(shown).toEqual([...head(1), 'PR 7', 'Bob', REQUIRED, ...NO_RUNS])
+      expect(shown).toContain(REQUIRED)
+      expect(shown.some(text => text.startsWith('Bob · '))).toBe(false)
       expect(callsTo('azThreads')).toHaveLength(2)
-      expect((await pane($)).texts).toContain('1 comment')
+      expect((await pane($)).texts).toContain('Bob · 1 comment')
     })
   }
 })
@@ -835,7 +842,8 @@ describe('Azure DevOps', () => {
 
     // Assert
     const { texts, links, hrefs } = await pane($)
-    expect(texts).toEqual([...head(2), 'PR 7', 'Bob', REQUIRED, 'PR 8', 'Bob · draft', REQUIRED, ...NO_RUNS])
+    expect(texts).toContain('2 open')
+    expect(texts).toContain('PR 8')
     expect(links).toEqual(['Titan Accounts/api', '#7', '#8'])
     expect(hrefs.slice(0, 2)).toEqual([`${ADO_WEB}/_git/api/pullrequests`, `${ADO_WEB}/_git/api/pullrequest/7`])
   })
@@ -855,20 +863,19 @@ describe('Azure DevOps', () => {
     await start($, clock)
 
     // Assert
-    const { texts, links, hrefs } = await pane($)
-    expect(texts).toEqual([...head(2), 'PR 7', 'Bob', REQUIRED, 'PR 8', 'Bob', REQUIRED, 'Pipelines', '#7', '● partial'])
-    expect(links).toContain('ci-3')
-    expect(hrefs).toContain(`${ADO_WEB}/_build/results?buildId=28`)
+    const { texts } = await pane($)
+    expect(texts.filter(text => CHIP.test(text)).sort()).toEqual(['✓ ci-1', '◐ ci-2', '! ci-3'].sort())
+    expect(texts).toContain('PR 8')
   })
 
   const RUN_STATES: [string, string | null, string][] = [
-    ['completed', 'succeeded', '● succeeded'],
-    ['completed', 'partiallySucceeded', '● partial'],
-    ['completed', 'canceled', '● cancelled'],
-    ['completed', 'failed', '● failed'],
-    ['inProgress', null, '● running'],
-    ['notStarted', null, '● queued'],
-    ['cancelling', null, '● cancelled'],
+    ['completed', 'succeeded', '✓ ci-1'],
+    ['completed', 'partiallySucceeded', '! ci-1'],
+    ['completed', 'canceled', '– ci-1'],
+    ['completed', 'failed', '✗ ci-1'],
+    ['inProgress', null, '◐ ci-1'],
+    ['notStarted', null, '○ ci-1'],
+    ['cancelling', null, '– ci-1'],
   ]
   for (const [status, result, shown] of RUN_STATES) {
     test(`the branch run ${status}/${result ?? '-'} shows as ${shown}`, async ($, on) => {
@@ -879,18 +886,18 @@ describe('Azure DevOps', () => {
       await start($, clock)
 
       // Assert
-      expect((await pane($)).texts).toEqual([...head(0), 'Pipelines', 'This branch', shown])
+      expect((await pane($)).texts.filter(text => CHIP.test(text))).toEqual([shown])
     })
   }
 
   const BRANCH_STATES: [string, boolean, string][] = [
-    ['active', false, 'This branch: #7 open'],
-    ['active', true, 'This branch: #7 draft'],
-    ['completed', false, 'This branch: #7 merged'],
-    ['abandoned', false, 'This branch: #7 closed'],
+    ['active', false, 'open'],
+    ['active', true, '◌ draft'],
+    ['completed', false, 'merged'],
+    ['abandoned', false, 'closed'],
   ]
   for (const [status, isDraft, shown] of BRANCH_STATES) {
-    test(`the branch PR ${status}${isDraft ? ' as draft' : ''} shows as "${shown}"`, async ($, on) => {
+    test(`the session branch PR ${status}${isDraft ? ' as draft' : ''} shows as "${shown}"`, async ($, on) => {
       // Arrange
       const { clock } = engine(on, { azMine: () => ok([azPr(7, isDraft, status)]) }, AZURE)
 
@@ -918,7 +925,7 @@ describe('Azure DevOps', () => {
 
     // Assert
     expect(callsTo('azRuns').length).toBeGreaterThan(before)
-    expect((await pane($)).texts).toContain('● succeeded')
+    expect((await pane($)).texts).toContain('✓ ci-1')
   })
 
   test('a failed runs call keeps the PR and branch runs', async ($, on) => {
@@ -934,7 +941,9 @@ describe('Azure DevOps', () => {
 
     // Assert
     expect(callsTo('azRuns').length).toBeGreaterThan(before)
-    expect((await pane($)).texts).toEqual([...head(1), 'PR 7', 'Bob', REQUIRED, 'Pipelines', 'This branch', '● failed', '#7', '● succeeded'])
+    const { texts } = await pane($)
+    expect(texts).toContain('✗ ci-1')
+    expect(texts).toContain('✓ ci-1')
   })
 
   test('the branch PR goes once the branch has none', async ($, on) => {
@@ -947,7 +956,9 @@ describe('Azure DevOps', () => {
     await clock.advance(3 * 60_000)
 
     // Assert
-    expect((await pane($)).texts).toEqual([...head(0), ...NO_RUNS])
+    const { texts } = await pane($)
+    expect(texts).toContain('no PR')
+    expect(texts).not.toContain('open')
   })
 
   test('asks for the repo id once', async ($, on) => {
@@ -1063,7 +1074,7 @@ describe('opening', () => {
     await clock.settle()
 
     // Assert
-    expect((await pane($)).texts[1]).toBe('2 open')
+    expect((await pane($)).texts).toContain('2 open')
     expect(opens).toEqual(['open-prs'])
   })
 
@@ -1175,7 +1186,7 @@ describe('refresh', () => {
     await clock.settle()
 
     // Assert
-    expect((await pane($)).texts[1]).toBe('1 open')
+    expect((await pane($)).texts).toContain('1 open')
   })
 
   test('a turn within a minute does not call gh again', async ($, on) => {
@@ -1205,7 +1216,7 @@ describe('refresh', () => {
 
     // Assert
     expect(callsTo('list').length).toBeGreaterThan(before)
-    expect((await pane($)).texts[1]).toBe('2 open')
+    expect((await pane($)).texts).toContain('1 open')
   })
 
   test('a failed branch lookup keeps the last branch PR', async ($, on) => {
@@ -1220,7 +1231,7 @@ describe('refresh', () => {
 
     // Assert
     expect(callsTo('view').length).toBeGreaterThan(before)
-    expect((await pane($)).texts).toContain('This branch: #12 open')
+    expect((await pane($)).texts).not.toContain('no PR')
   })
 
   test('the PR list empties once the repo has none open', async ($, on) => {
@@ -1233,7 +1244,7 @@ describe('refresh', () => {
     await clock.advance(3 * 60_000)
 
     // Assert
-    expect((await pane($)).texts[1]).toBe('0 open')
+    expect((await pane($)).texts).toContain('0 open')
   })
 
   test('the branch PR goes once the branch has none', async ($, on) => {
@@ -1247,8 +1258,7 @@ describe('refresh', () => {
 
     // Assert
     const { texts } = await pane($)
-    expect(texts).not.toContain('This branch: #12 open')
-    expect(texts).not.toContain('← this branch')
+    expect(texts).toContain('no PR')
   })
 })
 
@@ -1263,5 +1273,151 @@ describe('opening again', () => {
 
     // Assert
     expect(opens).toEqual([])
+  })
+})
+
+describe('cards', () => {
+  const PORCELAIN = 'worktree /repo\nHEAD 1\nbranch refs/heads/feature\n\nworktree /wt/other\nHEAD 2\nbranch refs/heads/other\n'
+  const threaded = () =>
+    ok({
+      data: {
+        repository: {
+          pullRequests: {
+            nodes: [
+              {
+                number: 12,
+                totalCommentsCount: 0,
+                reviewThreads: { totalCount: 5, nodes: [{ isResolved: true }, { isResolved: true }, { isResolved: true }, { isResolved: false }, { isResolved: false }] },
+              },
+            ],
+          },
+        },
+      },
+    })
+
+  test('the session card lists each branch of this session with its worktree folder', async ($, on) => {
+    // Arrange
+    const { clock } = engine(on, { view: () => fail(NO_PR), worktrees: () => raw(PORCELAIN) })
+
+    // Act
+    await start($, clock)
+
+    // Assert
+    const { texts } = await pane($)
+    expect(texts).toContain('⎇ feature')
+    expect(texts).toContain('/repo')
+    expect(texts).toContain('⎇ other')
+    expect(texts).toContain('/wt/other')
+    expect(texts.filter(text => text === 'no PR')).toHaveLength(2)
+  })
+
+  test('a branch without a PR gets the striped no-PR segment and its legend', async ($, on) => {
+    // Arrange
+    const { clock } = engine(on, { view: () => fail(NO_PR) })
+
+    // Act
+    await start($, clock)
+
+    // Assert
+    const { texts } = await pane($)
+    expect(texts).toContain('╱ 1 no PR')
+    expect(texts).toContain('╱'.repeat(40))
+    const ui = await mountPane($)
+    const stripes = (await ui.findAll({ type: 'Text' })).find(text => text.text === '╱'.repeat(40))
+    await ui.unmount()
+    expect(stripes?.props.backgroundColor).toBe('inactive')
+    expect(stripes?.props.color).toBeUndefined()
+  })
+
+  test('a card collapses and expands from its header, and the choice holds on a new mount', async ($, on) => {
+    // Arrange
+    const { clock } = engine(on)
+    await start($, clock)
+
+    // Act
+    await press($, clock, 'card-session')
+    const collapsed = await pane($)
+    await press($, clock, 'card-session')
+    const expanded = await pane($)
+
+    // Assert
+    expect(collapsed.buttons).toContain('▸ This session')
+    expect(collapsed.buttons).toContain('▾ Other open PRs')
+    expect(collapsed.texts).not.toContain('⎇ feature')
+    expect(collapsed.texts).toContain('threads ░░░░░░░░░░ 0/0')
+    expect(expanded.buttons).toContain('▾ This session')
+    expect(expanded.texts).toContain('⎇ feature')
+  })
+
+  test("a collapsed card shows its PRs' thread and CI bars", async ($, on) => {
+    // Arrange
+    const { clock } = engine(on, { counts: threaded, view: () => fail(NO_PR) })
+    await start($, clock)
+
+    // Act
+    await press($, clock, 'card-other')
+
+    // Assert
+    const { texts, buttons } = await pane($)
+    expect(buttons).toContain('▸ Other open PRs')
+    expect(texts).toContain('threads ██████░░░░ 3/5')
+    expect(texts).toContain('ci ░░░░░░░░░░ 0/0')
+    expect(texts).not.toContain('PR 15')
+  })
+
+  test('a session PR is listed in the session card only, not again under Other open PRs', async ($, on) => {
+    // Arrange
+    const { clock } = engine(on)
+
+    // Act
+    await start($, clock)
+
+    // Assert
+    const { texts, links } = await pane($)
+    expect(texts.filter(text => text === 'PR 12')).toHaveLength(1)
+    expect(links.filter(link => link === '#12')).toHaveLength(1)
+  })
+
+  test('the CLI errors card lists each failed call with its command, kind, time and message', async ($, on) => {
+    // Arrange
+    const { clock } = engine(on, { list: () => fail('HTTP 401: Bad credentials') })
+
+    // Act
+    await start($, clock)
+
+    // Assert
+    const { texts, buttons } = await pane($)
+    expect(buttons).toEqual(expect.arrayContaining(['▾ CLI errors', 'Close']))
+    expect(texts.some(text => text.startsWith('• gh pr list'))).toBe(true)
+    expect(texts.some(text => /^exit 1 · \d\d:\d\d:\d\d$/.test(text))).toBe(true)
+    expect(texts).toContain('HTTP 401: Bad credentials')
+  })
+
+  test('the CLI errors card is left out while there are no errors', async ($, on) => {
+    // Arrange
+    const { clock } = engine(on)
+
+    // Act
+    await start($, clock)
+
+    // Assert
+    const { buttons } = await pane($)
+    expect(buttons.some(label => label.includes('CLI errors'))).toBe(false)
+    expect(buttons).not.toContain('Close')
+  })
+
+  test('Close clears the CLI errors card', async ($, on) => {
+    // Arrange
+    const { clock } = engine(on, { list: () => fail('HTTP 401: Bad credentials') })
+    await start($, clock)
+    expect((await pane($)).buttons).toContain('Close')
+
+    // Act
+    await press($, clock, 'close-errors')
+
+    // Assert
+    const { buttons, texts } = await pane($)
+    expect(buttons).not.toContain('Close')
+    expect(texts).not.toContain('HTTP 401: Bad credentials')
   })
 })

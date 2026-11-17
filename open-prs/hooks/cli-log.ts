@@ -1,14 +1,8 @@
-import { atom, update } from 'claude-code'
-import type { EngineInterface } from 'claude-code'
-
 /** One failed `gh` or `az` call, as the CLI errors card lists it. The command and message are redacted before they are stored. */
 export type CliFailure = { command: string; exitCode: number | null; isTimeout: boolean; at: number; message: string }
 
 /** The newest failures kept; an older one drops off when a new one comes in. */
 export const CLI_LOG_CAP = 20
-
-/** The failures of the pane's CLI calls, newest last. Cleared by `clearCliErrors`. */
-export const cliErrors = atom({ plugin: 'open-prs', key: 'cliErrors' } as const, [] as CliFailure[])
 
 const CLI_TOOLS = ['gh', 'az']
 const NONE_FOUND = /no pull requests found/i
@@ -60,12 +54,3 @@ export function thrownFailureOf(argv: readonly string[], error: unknown, at: num
 
 /** The log with a new failure added, keeping the newest `CLI_LOG_CAP`. */
 export const withFailure = (log: CliFailure[], failure: CliFailure) => [...log, failure].slice(-CLI_LOG_CAP)
-
-export function recordFailure($: EngineInterface, failure: CliFailure) {
-  return update($, cliErrors, log => withFailure(log, failure))
-}
-
-/** The Close action of the CLI errors card: empties the log. */
-export function clearCliErrors($: EngineInterface) {
-  return update($, cliErrors, () => [])
-}
