@@ -59,8 +59,10 @@ done
 
 {
   echo "### Releases"
-  [ ${#released[@]} -gt 0 ] && printf -- '- released `%s`\n' "${released[@]}"
-  [ ${#skipped[@]} -gt 0 ] && printf -- '- skipped %s\n' "${skipped[@]}"
-  [ ${#released[@]} -eq 0 ] && [ ${#skipped[@]} -eq 0 ] && echo "- no mod changed"
+  if [ ${#released[@]} -gt 0 ]; then printf -- '- released `%s`
+' "${released[@]}"; fi
+  if [ ${#skipped[@]} -gt 0 ]; then printf -- '- skipped %s
+' "${skipped[@]}"; fi
+  if [ ${#released[@]} -eq 0 ] && [ ${#skipped[@]} -eq 0 ]; then echo "- no mod changed"; fi
 } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
 exit 0
