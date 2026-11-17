@@ -6,6 +6,7 @@ import { githubProvider } from './github'
 import { LIMIT, type Port, type Provider, type SessionBranch, type Snapshot, worst } from './provider'
 import { type Remote, remoteOf } from './remote'
 import { listWorktrees, sessionBranchesOf } from './worktrees'
+import { type CliFailure, failureOf, recordFailure, thrownFailureOf } from './cli-log'
 import type { Run } from '../types'
 
 const repo = atom({ plugin: 'open-prs', key: 'repo' } as const, null)
@@ -46,10 +47,29 @@ async function isLive($: EngineInterface, s: State) {
 
 const isPaneUp = async ($: EngineInterface) => (await $.ui.panes()).some(pane => pane.id === PANE)
 
-/** What the providers reach: the engine's CLI and clock, handed over as functions so no provider is given `$`. */
-function portOf($: EngineInterface): Port {
+/**
+ * What the providers reach: the engine's CLI and clock, handed over as functions so no provider is given `$`. A gh or az
+ * call that fails or throws is written to the CLI log, while this register is the live one.
+ */
+function portOf($: EngineInterface, s: State): Port {
+  const record = async (failure: CliFailure | null) => {
+    try {
+      if (failure && (await isLive($, s))) await recordFailure($, failure)
+    } catch {
+      // A log write that fails must not change the call's answer.
+    }
+  }
   return {
-    run: (argv, timeoutMs = 60_000) => $.process.run(argv, { timeoutMs }),
+    run: async (argv, timeoutMs = 60_000) => {
+      try {
+        const result = await $.process.run(argv, { timeoutMs })
+        await record(failureOf(argv, result, await $.clock.now()))
+        return result
+      } catch (error) {
+        await record(thrownFailureOf(argv, error, await $.clock.now()))
+        throw error
+      }
+    },
     now: () => $.clock.now(),
   }
 }
@@ -76,7 +96,7 @@ async function load($: EngineInterface, s: State) {
 
 /** Fetches the snapshot and publishes it. Opens the pane itself, after the answer, never inside the provider. */
 async function fetchPrs($: EngineInterface, s: State): Promise<(() => Promise<void>) | undefined> {
-  const port = portOf($)
+  const port = portOf($, s)
   const session = await $.session.repo()
   const remote = remoteOf(session?.remote ?? null)
   const origin = session?.remote?.replace(/\/\/[^@/]+@/, '//')
