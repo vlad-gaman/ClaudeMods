@@ -1058,7 +1058,7 @@ describe('opening', () => {
     const result = await prs($)
 
     // Assert
-    expect(commands).toEqual(['prs'])
+    expect(commands).toEqual(['prs-demo', 'prs'])
     expect(result).toMatchObject({ text: 'Open PRs pane opened.' })
     expect(opens).toEqual(['open-prs'])
   })
@@ -1394,6 +1394,25 @@ describe('cards', () => {
 
     // Assert
     expect(links.map(link => link.props.href)).toContain(BUILD)
+  })
+
+  test('/prs-demo shows stub PRs and branches, and /prs goes back to the real ones', async ($, on) => {
+    // Arrange
+    const { clock } = engine(on, { view: () => fail(NO_PR) })
+    await start($, clock)
+
+    // Act
+    await $.command.run({ command: 'prs-demo', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 200 } })
+    await clock.settle()
+    const demo = await pane($)
+    await $.command.run({ command: 'prs', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 200 } })
+    await clock.settle()
+    const real = await pane($)
+
+    // Assert
+    expect(demo.links).toContain('#139')
+    expect(demo.texts).toContain('Pane: show pipelines per PR')
+    expect(real.links).not.toContain('#139')
   })
 
   test('the terminal keeps glyphs and draws no Svg', async ($, on) => {
