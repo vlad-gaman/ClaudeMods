@@ -1382,6 +1382,20 @@ describe('cards', () => {
     expect(texts.some(text => /[█░▒]/.test(text))).toBe(false)
   })
 
+  test('a desktop run pill links to its pipeline', async ($, on) => {
+    // Arrange
+    const { clock } = engine(on, { list: () => ok([pr(12, 'alice', false, [check('ci', 'SUCCESS', BUILD)])]), view: () => fail(NO_PR) })
+    await start($, clock)
+
+    // Act
+    const ui = await mountPane($, 'desktop')
+    const links = await ui.findAll({ type: 'Link' })
+    await ui.unmount()
+
+    // Assert
+    expect(links.map(link => link.props.href)).toContain(BUILD)
+  })
+
   test('the terminal keeps glyphs and draws no Svg', async ($, on) => {
     // Arrange
     const { clock } = engine(on, { view: () => fail(NO_PR) })

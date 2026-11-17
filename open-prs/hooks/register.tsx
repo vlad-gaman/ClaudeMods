@@ -5,7 +5,7 @@ import { azureProvider } from './azure'
 import { githubProvider } from './github'
 import { LIMIT, type Port, type Provider, type SessionBranch, type Snapshot, worst } from './provider'
 import { type Remote, remoteOf } from './remote'
-import { type IconName, iconSvg, pillSvg, progressSvg, statusBarSvg } from './icons'
+import { type IconName, iconSvg, progressSvg, statusBarSvg } from './icons'
 import { listWorktrees, sessionBranchesOf } from './worktrees'
 import { type CliFailure, failureOf, thrownFailureOf, withFailure } from './cli-log'
 import {
@@ -381,7 +381,10 @@ export const register: Register = on => {
         <Box flexDirection="row" columnGap={1} flexWrap={Svg ? 'wrap' : undefined} alignItems={Svg ? 'flex-start' : undefined}>
           {runs.map((run, i) => (
             Svg ? (
-              <Svg key={`run-${i}`} source={pillSvg(run.state, RUN_TONE[run.state], run.name).source} alt={run.name} width={pillSvg(run.state, RUN_TONE[run.state], run.name).width} height={22} />
+              <Box key={`run-${i}`} flexDirection="row" columnGap={1}>
+                <Svg source={iconSvg(run.state, RUN_TONE[run.state])} alt={run.state} width={14} height={14} />
+                <Link href={run.url} label={run.name} />
+              </Box>
             ) : (
               <Text key={`run-${i}`} backgroundColor={RUN_TONE[run.state]}>
                 {`${RUN_GLYPH[run.state]} ${run.name}`}
