@@ -5,7 +5,6 @@ import { azureProvider } from './azure'
 import { githubProvider } from './github'
 import { LIMIT, type Port, type Provider, type SessionBranch, type Snapshot, worst } from './provider'
 import { type Remote, remoteOf } from './remote'
-import { DEMO_BRANCHES, DEMO_BRANCH_PR, DEMO_REPO, DEMO_RUNS, demoErrors } from './demo'
 import { type IconName, iconSvg, progressSvg, statusBarSvg } from './icons'
 import { listWorktrees, sessionBranchesOf } from './worktrees'
 import { type CliFailure, failureOf, thrownFailureOf, withFailure } from './cli-log'
@@ -68,8 +67,6 @@ type State = {
   isDocked: boolean | undefined
   retry: { cancel: () => void } | undefined
   pressed: number
-  /** Set by /prs-demo: stub data is shown and refreshes leave it be, until /prs. */
-  isDemo: boolean
   /** One provider per host, made per register, so each provider's caches start empty too. */
   providers: Record<Remote['host'], Provider>
 }
@@ -195,7 +192,6 @@ async function onTick($: EngineInterface, s: State) {
 }
 
 function refresh($: EngineInterface, s: State) {
-  if (s.isDemo) return Promise.resolve()
   s.tick ??= $.clock.every(REFRESH_MS, () => void onTick($, s))
   s.fetching ??= load($, s)
     .catch(() => {})
@@ -249,7 +245,6 @@ export const register: Register = on => {
     isDocked: undefined,
     retry: undefined,
     pressed: 0,
-    isDemo: false,
     providers: { github: githubProvider(), azure: azureProvider() },
   }
 
@@ -257,31 +252,12 @@ export const register: Register = on => {
     const started = await next(e)
     s.generation = await update($, generation, n => n + 1)
     await update($, isRefreshing, () => false)
-    await $.command.register({ name: 'prs-demo', description: 'Show the Open PRs pane with stub data, to see its look; /prs goes back to the real PRs' })
     await $.command.register({ name: 'prs', description: "Show the repo's open GitHub or Azure DevOps PRs and their pipelines in a side pane" })
     kick($, s)
     return started
   })
 
-  on('command.run', { command: 'prs-demo' }, async ($, e) => {
-    s.isDemo = true
-    await update($, repo, () => DEMO_REPO)
-    await update($, branchPr, () => DEMO_BRANCH_PR)
-    await update($, branchRuns, () => DEMO_RUNS)
-    await update($, sessionBranches, () => DEMO_BRANCHES)
-    await update($, cliErrors, () => demoErrors(0))
-    await update($, failedCli, () => null)
-    await update($, isLoaded, () => true)
-    await update($, isDismissed, () => false)
-    const opened = await $.ui.open({ id: PANE, title: TITLE })
-    return { text: opened.isPlaced ? 'Open PRs pane showing stub data; /prs goes back to the real PRs.' : `Open PRs pane is waiting: ${opened.reason}` }
-  })
-
   on('command.run', { command: 'prs' }, async ($, e) => {
-    if (s.isDemo) {
-      s.isDemo = false
-      await update($, cliErrors, () => [])
-    }
     await update($, isDismissed, () => false)
     const opened = await $.ui.open({ id: PANE, title: TITLE })
     kick($, s)
