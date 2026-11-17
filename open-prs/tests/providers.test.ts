@@ -37,6 +37,7 @@ const pr = (number: number, extra: Record<string, unknown> = {}) => ({
   number,
   title: `PR ${number}`,
   author: { login: 'alice' },
+  headRefName: 'feature',
   isDraft: false,
   url: `https://github.com/esendex/api/pull/${number}`,
   reviewDecision: 'REVIEW_REQUIRED',
@@ -78,7 +79,7 @@ describe('GitHub provider', () => {
 
     // Assert
     expect(calls).toEqual([
-      ['gh', 'pr', 'list', '-R', 'esendex/api', '--state', 'open', '--limit', '51', '--json', 'number,title,author,isDraft,url,reviewDecision,latestReviews,statusCheckRollup'],
+      ['gh', 'pr', 'list', '-R', 'esendex/api', '--state', 'open', '--limit', '51', '--json', 'number,title,author,isDraft,url,headRefName,reviewDecision,latestReviews,statusCheckRollup'],
       ['gh', 'pr', 'view', '--json', 'number,title,state,isDraft'],
       ['gh', 'api', 'graphql', '-f', QUERY, '-f', 'owner=esendex', '-f', 'name=api', '-f', 'ref=refs/heads/feature'],
       ['gh', 'api', 'graphql', '-f', QUERY, '-f', 'owner=esendex', '-f', 'name=api'],
@@ -121,6 +122,7 @@ describe('GitHub provider', () => {
           author: 'alice',
           isDraft: false,
           url: 'https://github.com/esendex/api/pull/12',
+          branch: 'feature',
           review: 'approved',
           comments: 3,
           threads: null,
@@ -233,6 +235,38 @@ describe('GitHub provider', () => {
 
     // Assert
     expect(snapshot.branchRuns).toBeUndefined()
+  })
+
+  test("joins this session's branches to their open PRs, and gives a branch with none a null PR", async () => {
+    // Arrange
+    const { port } = stubPort([ok([pr(12)]), fail(NO_PR), ok(counts())])
+    const sessionBranches = [
+      { branch: 'feature', path: 'D:/wt/feature' },
+      { branch: 'topic', path: 'D:/wt/topic' },
+    ]
+
+    // Act
+    const snapshot = await githubProvider().fetch(port, GITHUB, { branch: null, previous: null, sessionBranches })
+
+    // Assert
+    expect(snapshot.sessionBranches).toEqual([
+      { branch: 'feature', path: 'D:/wt/feature', prNumber: 12 },
+      { branch: 'topic', path: 'D:/wt/topic', prNumber: null },
+    ])
+  })
+
+  test("this session's branches are unknown when the PR list failed, and unknown when not given", async () => {
+    // Arrange
+    const failed = stubPort([fail('HTTP 502'), fail(NO_PR), ok({ data: { repository: { ref: null } } }), ok(counts())])
+    const given = stubPort([ok([]), fail(NO_PR), ok({ data: { repository: { ref: null } } }), ok(counts())])
+
+    // Act
+    const withFailedList = await githubProvider().fetch(failed.port, GITHUB, { branch: null, previous: null, sessionBranches: [] })
+    const withoutBranches = await githubProvider().fetch(given.port, GITHUB, BRANCH)
+
+    // Assert
+    expect(withFailedList.sessionBranches).toBeUndefined()
+    expect(withoutBranches.sessionBranches).toBeUndefined()
   })
 
   test('a gh call that cannot run is unknown: the repo is left as it was', async () => {
@@ -425,6 +459,22 @@ describe('Azure DevOps provider', () => {
 
     // Assert
     expect(published.map(pr => pr.threads)).toEqual([{ total: 1, resolved: 0 }, { total: 1, resolved: 0 }])
+  })
+
+  test("joins this session's branches to the active PRs by source branch", async () => {
+    // Arrange
+    const { port } = stubPort([ok([{ ...azPr(7), branch: 'refs/heads/feature' }]), ok([]), ok('repo-id')])
+
+    // Act
+    const snapshot = await azureProvider().fetch(port, AZURE, {
+      branch: null,
+      previous: null,
+      sessionBranches: [{ branch: 'feature', path: 'D:/wt/feature' }],
+    })
+
+    // Assert
+    expect(snapshot.sessionBranches).toEqual([{ branch: 'feature', path: 'D:/wt/feature', prNumber: 7 }])
+    expect(snapshot.repo?.prs[0]?.branch).toBe('feature')
   })
 
   test('a Github remote is refused', async () => {

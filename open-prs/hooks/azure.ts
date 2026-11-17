@@ -1,11 +1,12 @@
 import type { OpenPr, PrState, RepoPrs, ReviewState, Run, RunState } from '../types'
-import { type FetchContext, LIMIT, type Port, type Provider, type Snapshot, cli, latestRuns, previousPr, worst } from './provider'
+import { type FetchContext, LIMIT, type Port, type Provider, type Snapshot, cli, joinSessionBranches, latestRuns, previousPr, worst } from './provider'
 import type { Remote } from './remote'
 
 // The shapes of the `az` JSON this provider reads. The argv of each call is pinned in tests/providers.test.ts.
 type AzPr = {
   number: number
   title: string
+  branch: string | null
   author: string | null
   isDraft: boolean | null
   status: string
@@ -22,7 +23,7 @@ const AZ_THREAD_CALLS = 6
 const COUNT_MS = 10 * 60_000
 const COUNTS_PER_PASS = 12
 const AZ_PR_FIELDS =
-  '[].{number:pullRequestId,title:title,author:createdBy.displayName,isDraft:isDraft,status:status,votes:reviewers[].{vote:vote,isRequired:isRequired,isGroup:isContainer}}'
+  '[].{number:pullRequestId,title:title,branch:sourceBranch,author:createdBy.displayName,isDraft:isDraft,status:status,votes:reviewers[].{vote:vote,isRequired:isRequired,isGroup:isContainer}}'
 const AZ_THREADS = 'value[].{isDeleted:isDeleted,status:status,comments:comments[].{type:commentType,isDeleted:isDeleted}}'
 // Thread statuses that mean resolved; active, pending and a thread with no status are still open.
 const RESOLVED_STATUSES = ['fixed', 'closed', 'wontFix', 'byDesign']
@@ -58,7 +59,7 @@ const azureOrg = (remote: Azure) => `https://dev.azure.com/${remote.org}`
 async function fetchAzure(
   port: Port,
   remote: Azure,
-  { branch, previous }: FetchContext,
+  { branch, previous, sessionBranches }: FetchContext,
   repoIds: Map<string, string>,
   commentCounts: Map<string, AzCounts>,
 ): Promise<Snapshot> {
@@ -95,6 +96,7 @@ async function fetchAzure(
       author: pr.author ?? 'unknown',
       isDraft: pr.isDraft ?? false,
       url: `${git}/pullrequest/${pr.number}`,
+      branch: (pr.branch ?? '').replace(/^refs\/heads\//, ''),
       review: azReview(pr),
       comments: commentCounts.get(`${git}/pullrequest/${pr.number}`)?.count ?? previousPr(previous, url, pr.number)?.comments ?? null,
       threads: commentCounts.get(`${git}/pullrequest/${pr.number}`)?.threads ?? previousPr(previous, url, pr.number)?.threads ?? null,
@@ -103,8 +105,10 @@ async function fetchAzure(
     }
   }
   const branchPr = mine && 'data' in mine ? mine.data[0] : undefined
+  const repo: RepoPrs | undefined = 'data' in open ? { slug: `${remote.project}/${remote.name}`, url, prs: open.data.map(toOpenPr) } : undefined
   return {
-    repo: 'data' in open ? { slug: `${remote.project}/${remote.name}`, url, prs: open.data.map(toOpenPr) } : undefined,
+    repo,
+    sessionBranches: joinSessionBranches(sessionBranches, repo?.prs),
     branchPr: !mine ? null : 'data' in mine ? (branchPr ? { number: branchPr.number, title: branchPr.title, state: azState(branchPr) } : null) : undefined,
     branchRuns: !branch ? null : known ? latestRuns(runsOf(`refs/heads/${branch}`, known)) : undefined,
   }

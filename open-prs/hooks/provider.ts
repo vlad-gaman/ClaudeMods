@@ -8,10 +8,25 @@ export const SEVERITY: RunState[] = ['failed', 'cancelled', 'partial', 'running'
  * What one fetch found. Each field is tri-state: `undefined` means the call failed or never ran, so the last answer
  * stays; `null` means the host confirmed there is none; a value is the answer.
  */
-export type Snapshot = { repo?: RepoPrs | null; branchPr?: BranchPr | null; branchRuns?: Run[] | null }
+export type Snapshot = {
+  repo?: RepoPrs | null
+  branchPr?: BranchPr | null
+  branchRuns?: Run[] | null
+  sessionBranches?: SessionBranch[]
+}
 
-/** What a fetch is given besides the remote: the current branch (null when detached) and the last repo answer. */
-export type FetchContext = { branch: string | null; previous: RepoPrs | null }
+/** A branch this session works on: its worktree folder (null when unknown) and the open PR on it (null when none). */
+export type SessionBranch = { branch: string; path: string | null; prNumber: number | null }
+
+/** Joins the session's branches to the open PRs by head branch. Unknown when either the branches or the PR list is. */
+export const joinSessionBranches = (branches: { branch: string; path: string | null }[] | undefined, prs: OpenPr[] | undefined) =>
+  branches && prs ? branches.map(entry => ({ ...entry, prNumber: prs.find(pr => pr.branch === entry.branch)?.number ?? null })) : undefined
+
+/**
+ * What a fetch is given besides the remote: the current branch (null when detached), the last repo answer, and this
+ * session's branches (undefined when the worktree list is unknown).
+ */
+export type FetchContext = { branch: string | null; previous: RepoPrs | null; sessionBranches?: { branch: string; path: string | null }[] }
 
 /** `isMissing`: the call ran and failed; `isUnknown`: it threw or never ran, so whether the thing exists is not known. */
 export type CliResult<T> = { data: T } | { isMissing: boolean } | { isUnknown: true }

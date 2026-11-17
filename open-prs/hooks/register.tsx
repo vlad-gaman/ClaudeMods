@@ -3,14 +3,16 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import { azureProvider } from './azure'
 import { githubProvider } from './github'
-import { LIMIT, type Port, type Provider, type Snapshot, worst } from './provider'
+import { LIMIT, type Port, type Provider, type SessionBranch, type Snapshot, worst } from './provider'
 import { type Remote, remoteOf } from './remote'
+import { listWorktrees, sessionBranchesOf } from './worktrees'
 import type { Run } from '../types'
 
 const repo = atom({ plugin: 'open-prs', key: 'repo' } as const, null)
 const branchPr = atom({ plugin: 'open-prs', key: 'branchPr' } as const, null)
 const branchRun = atom({ plugin: 'open-prs', key: 'branchRun' } as const, null)
 const branchRuns = atom({ plugin: 'open-prs', key: 'branchRuns' } as const, [] as Run[])
+const sessionBranches = atom({ plugin: 'open-prs', key: 'sessionBranches' } as const, [] as SessionBranch[])
 const isDismissed = atom({ plugin: 'open-prs', key: 'isDismissed' } as const, false)
 const isLoaded = atom({ plugin: 'open-prs', key: 'isLoaded' } as const, false)
 const failedCli = atom({ plugin: 'open-prs', key: 'failedCli' } as const, null)
@@ -80,12 +82,16 @@ async function fetchPrs($: EngineInterface, s: State): Promise<(() => Promise<vo
   const origin = session?.remote?.replace(/\/\/[^@/]+@/, '//')
   if (await isLive($, s)) await update($, remoteNote, () => (!session ? 'not in a git repo' : origin ? `origin is ${origin}` : 'no origin remote'))
 
-  // The one host lookup: the provider for the remote's host fetches, names its tool and counts comments.
+  // The one host lookup: the provider for the remote's host fetches, names its tool and counts comments. This session's
+  // branches are the own worktree's branch and the linked worktrees' branches (issues/04).
   const provider = remote ? s.providers[remote.host] : null
-  const snapshot: Snapshot =
-    remote && provider
-      ? await provider.fetch(port, remote, { branch: await currentBranch(port), previous: await read($, repo) })
-      : { repo: null, branchPr: null, branchRun: null }
+  let snapshot: Snapshot = { repo: null, branchPr: null, branchRuns: null }
+  if (remote && provider) {
+    const branch = await currentBranch(port)
+    const worktrees = await listWorktrees(port)
+    const own = worktrees && session ? sessionBranchesOf(worktrees, { path: session.root, branch }) : undefined
+    snapshot = await provider.fetch(port, remote, { branch, previous: await read($, repo), sessionBranches: own })
+  }
 
   // A failed call keeps the last answer; only a confirmed "none" clears it.
   if (snapshot.repo !== undefined && (await isLive($, s))) await update($, repo, () => snapshot.repo ?? null)
@@ -95,6 +101,7 @@ async function fetchPrs($: EngineInterface, s: State): Promise<(() => Promise<vo
     await update($, branchRuns, () => runs)
     await update($, branchRun, () => worst(runs))
   }
+  if (snapshot.sessionBranches !== undefined && (await isLive($, s))) await update($, sessionBranches, () => snapshot.sessionBranches ?? [])
   const failed = snapshot.repo === undefined && provider ? provider.cli : null
   if (await isLive($, s)) await update($, failedCli, () => failed)
 

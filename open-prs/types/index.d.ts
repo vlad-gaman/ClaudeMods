@@ -12,6 +12,8 @@ export type OpenPr = {
   author: string
   isDraft: boolean
   url: string
+  /** The PR's head branch. */
+  branch: string
   review: ReviewState
   comments: number | null
   threads: { total: number; resolved: number } | null

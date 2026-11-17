@@ -15,7 +15,7 @@ const ACTIONS = 'https://github.com/esendex/api/actions/runs/1/job/2'
 const REQUIRED = '○ review required'
 
 type Answer = { exitCode: number; stdout: string; stderr: string }
-type Cli = Record<'list' | 'view' | 'checks' | 'counts' | 'branch' | 'azList' | 'azMine' | 'azRuns' | 'azRepo' | 'azThreads', () => Answer | Promise<Answer>>
+type Cli = Record<'list' | 'view' | 'checks' | 'counts' | 'branch' | 'worktrees' | 'azList' | 'azMine' | 'azRuns' | 'azRepo' | 'azThreads', () => Answer | Promise<Answer>>
 type Check = Record<string, unknown>
 
 const ok = (data: unknown): Answer => ({ exitCode: 0, stdout: JSON.stringify(data), stderr: '' })
@@ -48,6 +48,7 @@ const TURN = { answer: 'done', durationMs: 1000, isAborted: false, turnId: 't1',
 
 const ROUTES: [string, keyof Cli][] = [
   ['git branch --show-current', 'branch'],
+  ['git worktree list', 'worktrees'],
   ['gh pr list ', 'list'],
   ['gh pr view ', 'view'],
   ['gh api graphql ', 'checks'],
@@ -78,6 +79,7 @@ function engine(
     checks: () => ok(refChecks([])),
     counts: () => ok(counts()),
     branch: () => raw('feature\n'),
+    worktrees: () => raw(''),
     azList: () => ok([]),
     azMine: () => ok([]),
     azRuns: () => ok([]),

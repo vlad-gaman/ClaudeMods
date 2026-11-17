@@ -1,5 +1,5 @@
 import type { BranchPr, OpenPr, PrState, RepoPrs, ReviewState, Run, RunState } from '../types'
-import { type FetchContext, LIMIT, type Port, type Provider, type Snapshot, cli, latestRuns, previousPr, worst } from './provider'
+import { type FetchContext, LIMIT, type Port, type Provider, type Snapshot, cli, joinSessionBranches, latestRuns, previousPr, worst } from './provider'
 import type { Remote } from './remote'
 
 // The shapes of the `gh` JSON this provider reads. The argv of each call is pinned in tests/providers.test.ts.
@@ -21,6 +21,7 @@ type GhOpenPr = {
   author: { login: string } | null
   isDraft: boolean
   url: string
+  headRefName: string
   reviewDecision: string | null
   latestReviews: { state: string }[] | null
   statusCheckRollup: GhCheck[] | null
@@ -94,13 +95,13 @@ function pipelinesOf(checks: GhCheck[] | null | undefined, slug: string): Run[] 
   return builds.length > 0 ? builds : workflows
 }
 
-async function fetchGitHub(port: Port, slug: string, { branch, previous }: FetchContext): Promise<Snapshot> {
+async function fetchGitHub(port: Port, slug: string, { branch, previous, sessionBranches }: FetchContext): Promise<Snapshot> {
   const [owner = '', name = ''] = slug.split('/')
   const url = `https://github.com/${slug}/pulls`
   const [open, mine, checks, counts] = await Promise.all([
     cli<GhOpenPr[]>(port, [
       'gh', 'pr', 'list', '-R', slug, '--state', 'open', '--limit', String(LIMIT + 1),
-      '--json', 'number,title,author,isDraft,url,reviewDecision,latestReviews,statusCheckRollup',
+      '--json', 'number,title,author,isDraft,url,headRefName,reviewDecision,latestReviews,statusCheckRollup',
     ]),
     cli<GhBranchPr>(port, ['gh', 'pr', 'view', '--json', 'number,title,state,isDraft']),
     branch
@@ -121,14 +122,17 @@ async function fetchGitHub(port: Port, slug: string, { branch, previous }: Fetch
     author: pr.author?.login ?? 'ghost',
     isDraft: pr.isDraft,
     url: pr.url,
+    branch: pr.headRefName,
     review: ghReview(pr),
     comments: commentsOf(pr.number),
     threads: threadsOf(pr.number),
     runs: latestRuns(pipelinesOf(pr.statusCheckRollup, slug)),
     run: worst(latestRuns(pipelinesOf(pr.statusCheckRollup, slug))),
   })
+  const repo: RepoPrs | undefined = 'data' in open ? { slug, url, prs: open.data.map(toOpenPr) } : undefined
   return {
-    repo: 'data' in open ? { slug, url, prs: open.data.map(toOpenPr) } : undefined,
+    repo,
+    sessionBranches: joinSessionBranches(sessionBranches, repo?.prs),
     branchPr: 'data' in mine ? { number: mine.data.number, title: mine.data.title, state: ghState(mine.data) } : 'isMissing' in mine && mine.isMissing ? null : undefined,
     branchRuns: !checks
       ? null
