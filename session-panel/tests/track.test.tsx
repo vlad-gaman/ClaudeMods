@@ -56,6 +56,20 @@ test('a connector keyed by an id is titled with the name the engine lists it und
   await ui.unmount()
 })
 
+test("a subagent's plan does not replace the session's to-do list", async ($, on) => {
+  engine(on)
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const plan = (content: string, agentId?: string) =>
+    $.tool.call({ tool: 'mcp__ccd_turn__update_plan', items: [{ content, status: 'in_progress' }], agentId } as any)
+  await plan('Main task')
+  await plan('Subagent task', 'sub-1')
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(await ui.find({ type: 'Text', text: /Main task/ })).toBeTruthy()
+  expect(await ui.find({ type: 'Text', text: /Subagent task/ })).toBeFalsy()
+  await ui.unmount()
+})
+
 test('a skill run by the Skill tool is listed', async ($, on) => {
   engine(on)
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })

@@ -157,7 +157,8 @@ export const register: Register = on => {
     const mcp = mcpOf(tool)
     if (mcp.server) await trackConnector($, mcp.server, mcp.tool)
 
-    return TODO_TOOLS.has(tool) ? trackTodos($, tool, e as TodoInput, () => next(e)) : next(e)
+    // A subagent's own plan is not the session's: only the main conversation's calls edit the list.
+    return TODO_TOOLS.has(tool) && e.agentId === undefined ? trackTodos($, tool, e as TodoInput, () => next(e)) : next(e)
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
