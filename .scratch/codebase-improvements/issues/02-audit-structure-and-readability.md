@@ -13,7 +13,7 @@ Read the four `hooks/register.tsx` files (270-450 lines each). List concrete str
 Full audit: [research/02-audit-structure-and-readability.md](../research/02-audit-structure-and-readability.md) (per-mod tables with file:line, size, risk; untested pure logic; suggested split order). Spot-checked: switchboard reads other mods' `register.tsx` as text.
 
 Binding constraints on any split:
-- `command.register({ name` and `ui.open({ id` calls, plus the `const PANE` they name, must stay in each mod's `register.tsx` (switchboard regexes them, `switchboard/hooks/register.tsx:122-131`).
+- ~~`command.register({ name` and `ui.open({ id` must stay literal in each `register.tsx`~~ Superseded: switchboard now reads `claude plugin validate --json` through `switchboard/hooks/manifest.ts`, not source text (ticket 1, `7013468`), so these calls may move.
 - `applyTodoTool` (session-panel) and `severity` (usage-band) are imported from `register` by tests: re-export or change the imports.
 
 Headlines:
