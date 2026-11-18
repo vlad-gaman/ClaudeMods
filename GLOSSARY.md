@@ -71,4 +71,5 @@ The words the code uses. Use these terms in names, comments, issues and replies.
 
 - **Pipeline**: one ticket taken through tester, implementer, reviewer and documenter to a draft PR.
 - **Run flag**: set by `pipeline_begin` and cleared by `pipeline_end`; while set, Jira and Confluence writes are refused.
+- **Shell refusal**: the reason a Bash or PowerShell command line is refused, or none when it may run. `az` writes are refused to everyone; terraform and package publishing only to pipeline agents.
 - **Role**: one of `implementer`, `tester`, `documenter`, `reviewer`.

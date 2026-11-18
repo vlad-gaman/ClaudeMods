@@ -1,6 +1,6 @@
 {
   "name": "agent-pipeline",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "author": { "name": "Vlad Gaman" },
   "description": "Runs a vault ticket through test-first implementation, review and docs to a draft PR, with four subagents",
   "types": "./types/index.d.ts",

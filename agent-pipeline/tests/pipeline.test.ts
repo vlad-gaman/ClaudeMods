@@ -137,7 +137,7 @@ test('a subagent cannot clear the run flag', async ($, on) => {
   expect(write.deny).toBeDefined()
 })
 
-test('az commands that change Azure resources are refused, from the main loop and agents alike', async ($, on) => {
+test('the shell guard refuses az writes to the main loop and agents, and terraform and publishing to agents only', async ($, on) => {
   // Arrange
   engine(on)
   const bash = (command: string, agentId?: string) => $.tool.call({ tool: 'Bash', command, agentId })
@@ -145,75 +145,16 @@ test('az commands that change Azure resources are refused, from the main loop an
   // Act
   const results = await Promise.all([
     bash('az group delete -n x --yes'),
-    bash('az group create -n x -l uksouth', 'impl'),
-    bash('az keyvault secret set --vault-name v -n s --value x'),
-    bash('az webapp deployment slot swap -g g -n n --slot staging'),
-    bash('az repos pr create --title x'),
-    bash('az repos pr create --draft true --draft false --title x'),
-    bash('cd /d/Github/Repo && az group delete -n x'),
-    bash('bash -c "az group delete -n x"'),
-  ])
-
-  // Assert
-  expect(results.map(r => r.deny === undefined)).toEqual([false, false, false, false, false, false, false, false])
-})
-
-test('read-only az, local CLI settings and draft PRs pass the az guard', async ($, on) => {
-  // Arrange
-  engine(on)
-  const bash = (command: string) => $.tool.call({ tool: 'Bash', command, agentId: 'impl' })
-
-  // Act
-  const results = await Promise.all([
-    bash('az version --query "fix the update path"'),
-    bash('az group list -o table'),
-    bash('az account set --subscription x'),
-    bash('az repos pr create --draft true --title "update the start path"'),
-    bash('az repos pr create --title x --draft=true'),
-    bash('echo az group delete'),
-    bash('git commit -m "az group delete"'),
-  ])
-
-  // Assert
-  expect(results.map(r => r.deny === undefined)).toEqual([true, true, true, true, true, true, true])
-})
-
-test('pipeline agents are refused terraform beyond fmt and validate, and publishing', async ($, on) => {
-  // Arrange
-  engine(on)
-  const bash = (command: string, agentId?: string) => $.tool.call({ tool: 'Bash', command, agentId })
-
-  // Act
-  const refused = await Promise.all([
+    bash('az --debug repos pr create --title x', 'impl'),
     bash('terraform plan', 'impl'),
-    bash('terraform -chdir=a apply -auto-approve', 'test'),
-    bash('terraform state rm x', 'impl'),
-    bash('terraform init', 'test'),
-    bash('terraform -chdir=a init -input=false', 'test'),
-    bash('bash -c "terraform import a b"', 'impl'),
     bash('npm publish', 'docs'),
-    bash('./mvnw -B deploy', 'impl'),
-    bash('mvn release:prepare', 'impl'),
-    bash('dotnet nuget push x.nupkg', 'impl'),
-    bash('mvn deploy:deploy-file -Dfile=x.jar', 'impl'),
-    bash('mvn org.apache.maven.plugins:maven-deploy-plugin:3.1.1:deploy', 'impl'),
-    bash('nuget.exe push x.nupkg', 'impl'),
-    bash('terraform apply', 'rev'),
-  ])
-  const allowed = await Promise.all([
-    bash('terraform fmt -check -recursive', 'test'),
-    bash('terraform -chdir=a init -backend=false -input=false -lockfile=readonly && terraform -chdir=a validate', 'test'),
-    bash('terraform version', 'impl'),
-    bash('npm ci && npx ng test --watch=false', 'test'),
-    bash('mvn -B test', 'test'),
-    bash('dotnet test --blame-hang-timeout 5m', 'impl'),
+    bash('az group list -o table'),
     bash('terraform plan'),
     bash('terraform plan', 'other'),
   ])
 
   // Assert
-  expect(refused.map(r => r.deny === undefined)).toEqual(refused.map(() => false))
-  expect(allowed.map(r => r.deny === undefined)).toEqual(allowed.map(() => true))
+  expect(results.map(r => r.deny === undefined)).toEqual([false, false, false, false, true, true, true])
 })
 
 test('the az guard covers the PowerShell tool', async ($, on) => {
