@@ -257,7 +257,7 @@ describe('GitHub provider', () => {
 
   test("this session's branches are unknown when the PR list failed, and unknown when not given", async () => {
     // Arrange
-    const failed = stubPort([fail('HTTP 502'), fail(NO_PR), ok({ data: { repository: { ref: null } } }), ok(counts())])
+    const failed = stubPort([fail('HTTP 502'), fail(NO_PR), ok(counts()), fail('HTTP 502')])
     const given = stubPort([ok([]), fail(NO_PR), ok({ data: { repository: { ref: null } } }), ok(counts())])
 
     // Act
@@ -278,6 +278,36 @@ describe('GitHub provider', () => {
 
     // Assert
     expect(snapshot.repo).toBeUndefined()
+  })
+
+  test('a panicking PR list is retried without the rollup, and the runs come from the API', async () => {
+    // Arrange
+    const panic = { exitCode: 2, stdout: '', stderr: 'panic: runtime error: invalid memory address or nil pointer dereference' }
+    const build = { __typename: 'CheckRun', name: 'api-ci', status: 'COMPLETED', conclusion: 'FAILURE', detailsUrl: BUILD }
+    const rollups = { data: { repository: { pullRequests: { nodes: [{ number: 12, commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes: [build] } } } }] } }] } } } }
+    const { port, calls } = stubPort([panic, fail(NO_PR), ok(counts()), ok([pr(12, { statusCheckRollup: undefined })]), ok(rollups)])
+
+    // Act
+    const snapshot = await githubProvider().fetch(port, GITHUB, { branch: null, previous: null })
+
+    // Assert
+    expect(calls[0]?.at(-1)).toContain('statusCheckRollup')
+    expect(calls[3]?.at(-1)).not.toContain('statusCheckRollup')
+    expect(calls[4]).toEqual(['gh', 'api', 'graphql', '-f', QUERY, '-f', 'owner=esendex', '-f', 'name=api'])
+    expect(snapshot.repo?.prs[0]?.runs).toEqual([{ name: 'api-ci', state: 'failed', url: BUILD }])
+  })
+
+  test('the PRs still show, without runs, when the fallback runs call fails too', async () => {
+    // Arrange
+    const panic = { exitCode: 2, stdout: '', stderr: 'panic' }
+    const { port } = stubPort([panic, fail(NO_PR), ok(counts()), ok([pr(12)]), fail('HTTP 502')])
+
+    // Act
+    const snapshot = await githubProvider().fetch(port, GITHUB, { branch: null, previous: null })
+
+    // Assert
+    expect(snapshot.repo?.prs.map(open => open.number)).toEqual([12])
+    expect(snapshot.repo?.prs[0]?.runs).toEqual([])
   })
 
   test('a branch with no PR is a confirmed none, and a failed view is unknown', async () => {
