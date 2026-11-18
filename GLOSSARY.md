@@ -64,6 +64,7 @@ The words the code uses. Use these terms in names, comments, issues and replies.
 - **Tier**: `haiku`, `sonnet` or `opus`.
 - **Lock**: the tier chosen once for the session from the first prompt. **Pinned** when set with `/route <tier>`, so prompts never raise it.
 - **Skill log**: the per-run record of a skill's models, time and cost.
+- **Recorder**: the part of Model Router that tracks skill runs and writes the Skill log. _Avoid_: logger, tracker.
 - **Skill run**: one use of a skill, from its `Skill` call or typed command to its end, logged with its models, time and cost. Not the Open PRs **Run**, which is a CI pipeline run.
 
 ## Agent Pipeline
