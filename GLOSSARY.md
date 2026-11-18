@@ -55,6 +55,8 @@ The words the code uses. Use these terms in names, comments, issues and replies.
 - **Branch PR**: the open PR for the current branch, marked in the pane.
 - **Card**: one of the boxes in the Open PRs pane: **This session**, **Other open PRs**, and **CLI errors**. The first two share one look: a header, a status bar, a legend, and the branches or PRs.
 - **Pane model**: what the Open PRs pane shows, worked out from the mod's atoms: loading, failed, no remote, or ready with its two cards. The view only draws it.
+- **Snapshot**: what one fetch found: the repo's PRs, the branch PR, its runs and the session's branches. Each field is tri-state: unknown (the call failed, so the last answer stays), none (confirmed, so it clears) or a value.
+- **Publish**: applying a snapshot to the pane's atoms, only while its register is still the live one.
 - **Run**: a pipeline run (GitHub check or Azure pipeline) shown with its state.
 
 ## Model Router

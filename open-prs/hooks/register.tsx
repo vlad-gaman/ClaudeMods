@@ -4,6 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import { azureProvider } from './azure'
 import { githubProvider } from './github'
 import type { Port, Provider, SessionBranch, Snapshot } from './provider'
+import { publish } from './snapshot'
 import { type Remote, remoteOf } from './remote'
 import { listWorktrees, sessionBranchesOf } from './worktrees'
 import { type CliFailure, failureOf, thrownFailureOf, withFailure } from './cli-log'
@@ -98,6 +99,25 @@ async function load($: EngineInterface, s: State) {
   await countLater?.()
 }
 
+/** One quick retry per run of failures; after that the regular refresh takes over. */
+async function scheduleRetry($: EngineInterface, s: State, failed: Provider['cli'] | null) {
+  if (failed && !s.retry && (await isLive($, s))) s.retry = $.clock.after(RETRY_MS, () => void refresh($, s))
+  else if (!failed) {
+    s.retry?.cancel()
+    s.retry = undefined
+  }
+}
+
+/**
+ * Opens the pane unasked only where it docks beside the transcript, never inline above the prompt, never over a pane
+ * already up, and never once the person has closed it.
+ */
+async function maybeOpen($: EngineInterface, s: State, hasPrs: boolean) {
+  if (hasPrs && s.isDocked !== false && (await isLive($, s)) && !(await read($, isDismissed)) && !(await isPaneUp($))) {
+    await $.ui.open({ id: PANE, title: TITLE })
+  }
+}
+
 /** Fetches the snapshot and publishes it. Opens the pane itself, after the answer, never inside the provider. */
 async function fetchPrs($: EngineInterface, s: State): Promise<(() => Promise<void>) | undefined> {
   const port = portOf($, s)
@@ -117,35 +137,18 @@ async function fetchPrs($: EngineInterface, s: State): Promise<(() => Promise<vo
     snapshot = await provider.fetch(port, remote, { branch, previous: await read($, repo), sessionBranches: own })
   }
 
-  // A failed call keeps the last answer; only a confirmed "none" clears it.
-  if (snapshot.repo !== undefined && (await isLive($, s))) await update($, repo, () => snapshot.repo ?? null)
-  if (snapshot.branchPr !== undefined && (await isLive($, s))) await update($, branchPr, () => snapshot.branchPr ?? null)
-  if (snapshot.branchRuns !== undefined && (await isLive($, s))) {
-    const runs = snapshot.branchRuns ?? []
-    await update($, branchRuns, () => runs)
-  }
-  if (snapshot.sessionBranches !== undefined && (await isLive($, s))) await update($, sessionBranches, () => snapshot.sessionBranches ?? [])
-  const failed = snapshot.repo === undefined && provider ? provider.cli : null
-  if (await isLive($, s)) await update($, failedCli, () => failed)
-
-  // One quick retry per run of failures; after that the regular refresh takes over.
-  if (failed && !s.retry && (await isLive($, s))) s.retry = $.clock.after(RETRY_MS, () => void refresh($, s))
-  else if (!failed) {
-    s.retry?.cancel()
-    s.retry = undefined
-  }
-
-  // Opened unasked only where it docks beside the transcript, never inline above the prompt, never over a pane
-  // already up, and never once the person has closed it.
-  if (
-    snapshot.repo?.prs.length &&
-    s.isDocked !== false &&
-    (await isLive($, s)) &&
-    !(await read($, isDismissed)) &&
-    !(await isPaneUp($))
-  ) {
-    await $.ui.open({ id: PANE, title: TITLE })
-  }
+  const { failed, hasPrs } = await publish(snapshot, provider, {
+    isLive: () => isLive($, s),
+    apply: async (writes, failedTool) => {
+      if (writes.repo !== undefined) await update($, repo, () => writes.repo ?? null)
+      if (writes.branchPr !== undefined) await update($, branchPr, () => writes.branchPr ?? null)
+      if (writes.branchRuns) await update($, branchRuns, () => writes.branchRuns ?? [])
+      if (writes.sessionBranches) await update($, sessionBranches, () => writes.sessionBranches ?? [])
+      await update($, failedCli, () => failedTool)
+    },
+  })
+  await scheduleRetry($, s, failed)
+  await maybeOpen($, s, hasPrs)
 
   const shown = snapshot.repo
   if (!remote || !provider || !shown || !provider.countComments) return undefined
