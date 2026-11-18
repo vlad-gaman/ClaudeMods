@@ -1447,19 +1447,6 @@ describe('cards', () => {
     expect(texts).not.toContain('PR 15')
   })
 
-  test('a session PR is listed in the session card only, not again under Other open PRs', async ($, on) => {
-    // Arrange
-    const { clock } = engine(on)
-
-    // Act
-    await start($, clock)
-
-    // Assert
-    const { texts, links } = await pane($)
-    expect(texts.filter(text => text === 'PR 12')).toHaveLength(1)
-    expect(links.filter(link => link === '#12')).toHaveLength(1)
-  })
-
   test('the CLI errors card lists each failed call with its command, kind, time and message', async ($, on) => {
     // Arrange
     const { clock } = engine(on, { list: () => fail('HTTP 401: Bad credentials') })

@@ -1,18 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
-import {
-  bar,
-  ciTotals,
-  failureKind,
-  groupByStatus,
-  noun,
-  segmentWidths,
-  sessionRows,
-  statusBar,
-  statusCounts,
-  statusOf,
-  threadText,
-  threadTotals,
-} from '../hooks/cards'
+import { bar, failureKind, noun, threadText } from '../hooks/cards'
+import { ciTotals, groupByStatus, segmentWidths, sessionRows, statusBar, statusCounts, statusOf, threadTotals } from '../hooks/pane-model'
 import type { BranchPr, OpenPr, Run } from '../types'
 
 const run = (state: Run['state'], name = 'ci'): Run => ({ name, state, url: `https://ci/${name}` })
