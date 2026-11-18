@@ -119,7 +119,8 @@ function engine(
     return <Text>engine</Text>
   })
 
-  const callsTo = (key: keyof Cli) => calls.filter(argv => route(argv) === key)
+  // The fallback list (no statusCheckRollup) is not a fetch of its own: `callsTo('list')` counts first attempts.
+  const callsTo = (key: keyof Cli) => calls.filter(argv => route(argv) === key && !(key === 'list' && !argv.join(' ').includes('statusCheckRollup')))
   return { clock, cli, calls, callsTo, opens, commands, repoReads, panes }
 }
 

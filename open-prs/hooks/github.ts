@@ -1,5 +1,5 @@
 import type { BranchPr, OpenPr, PrState, RepoPrs, ReviewState, Run, RunState } from '../types'
-import { type FetchContext, LIMIT, type Port, type Provider, type Snapshot, cli, joinSessionBranches, latestRuns, previousPr, worst } from './provider'
+import { type CliResult, type FetchContext, LIMIT, type Port, type Provider, type Snapshot, cli, joinSessionBranches, latestRuns, previousPr, worst } from './provider'
 import type { Remote } from './remote'
 
 // The shapes of the `gh` JSON this provider reads. The argv of each call is pinned in tests/providers.test.ts.
@@ -35,6 +35,13 @@ type GhCommentCounts = {
     } | null
   }
 }
+type GhPrChecks = {
+  data: {
+    repository: {
+      pullRequests: { nodes: { number: number; commits: { nodes: { commit: { statusCheckRollup?: { contexts: { nodes: GhCheck[] } } | null } }[] } }[] }
+    } | null
+  }
+}
 type GhBranchPr = { number: number; title: string; state: 'OPEN' | 'MERGED' | 'CLOSED'; isDraft: boolean }
 type GhRefChecks = {
   data: { repository: { ref: { target: { statusCheckRollup?: { contexts: { nodes: GhCheck[] } } | null } } | null } | null }
@@ -46,6 +53,18 @@ const COMMENT_COUNTS = `query($owner: String!, $name: String!) {
   repository(owner: $owner, name: $name) {
     pullRequests(states: OPEN, first: 100, orderBy: { field: CREATED_AT, direction: DESC }) {
       nodes { number totalCommentsCount reviewThreads(first: 100) { totalCount nodes { isResolved } } }
+    }
+  }
+}`
+// The fallback for runs when `gh pr list` cannot print `statusCheckRollup` (it has panicked on some repos): the same rollup, through the API.
+const PR_CHECKS = `query($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(states: OPEN, first: 100, orderBy: { field: CREATED_AT, direction: DESC }) {
+      nodes { number commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
+        __typename
+        ... on CheckRun { name status conclusion detailsUrl checkSuite { workflowRun { workflow { name } } } }
+        ... on StatusContext { context state targetUrl }
+      } } } } } } }
     }
   }
 }`
@@ -98,17 +117,28 @@ function pipelinesOf(checks: GhCheck[] | null | undefined, slug: string): Run[] 
 async function fetchGitHub(port: Port, slug: string, { branch, previous, sessionBranches }: FetchContext): Promise<Snapshot> {
   const [owner = '', name = ''] = slug.split('/')
   const url = `https://github.com/${slug}/pulls`
-  const [open, mine, checks, counts] = await Promise.all([
-    cli<GhOpenPr[]>(port, [
-      'gh', 'pr', 'list', '-R', slug, '--state', 'open', '--limit', String(LIMIT + 1),
-      '--json', 'number,title,author,isDraft,url,headRefName,reviewDecision,latestReviews,statusCheckRollup',
-    ]),
+  const list = (fields: string) => cli<GhOpenPr[]>(port, ['gh', 'pr', 'list', '-R', slug, '--state', 'open', '--limit', String(LIMIT + 1), '--json', fields])
+  const LIST_FIELDS = 'number,title,author,isDraft,url,headRefName,reviewDecision,latestReviews'
+  let [open, mine, checks, counts] = await Promise.all([
+    list(`${LIST_FIELDS},statusCheckRollup`),
     cli<GhBranchPr>(port, ['gh', 'pr', 'view', '--json', 'number,title,state,isDraft']),
     branch
       ? cli<GhRefChecks>(port, ['gh', 'api', 'graphql', '-f', `query=${REF_CHECKS}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-f', `ref=refs/heads/${branch}`])
       : null,
     cli<GhCommentCounts>(port, ['gh', 'api', 'graphql', '-f', `query=${COMMENT_COUNTS}`, '-f', `owner=${owner}`, '-f', `name=${name}`]),
   ])
+  // When the list call fails, retry without the rollup (the likeliest thing for gh to choke on) and read the runs from the API.
+  let prChecks: CliResult<GhPrChecks> | undefined
+  if (!('data' in open)) {
+    open = await list(LIST_FIELDS)
+    if ('data' in open) prChecks = await cli<GhPrChecks>(port, ['gh', 'api', 'graphql', '-f', `query=${PR_CHECKS}`, '-f', `owner=${owner}`, '-f', `name=${name}`])
+  }
+  const rollupOf = (pr: GhOpenPr): GhCheck[] | null | undefined =>
+    prChecks === undefined
+      ? pr.statusCheckRollup
+      : 'data' in prChecks
+        ? prChecks.data.data.repository?.pullRequests?.nodes.find(node => node.number === pr.number)?.commits.nodes[0]?.commit.statusCheckRollup?.contexts.nodes
+        : null
   const countNode = (number: number) => ('data' in counts ? counts.data.data.repository?.pullRequests.nodes.find(node => node.number === number) : undefined)
   const commentsOf = (number: number) => countNode(number)?.totalCommentsCount ?? previousPr(previous, url, number)?.comments ?? null
   // The resolved count reads the first 100 threads of the PR, the most one query returns.
@@ -126,8 +156,8 @@ async function fetchGitHub(port: Port, slug: string, { branch, previous, session
     review: ghReview(pr),
     comments: commentsOf(pr.number),
     threads: threadsOf(pr.number),
-    runs: latestRuns(pipelinesOf(pr.statusCheckRollup, slug)),
-    run: worst(latestRuns(pipelinesOf(pr.statusCheckRollup, slug))),
+    runs: latestRuns(pipelinesOf(rollupOf(pr), slug)),
+    run: worst(latestRuns(pipelinesOf(rollupOf(pr), slug))),
   })
   const repo: RepoPrs | undefined = 'data' in open ? { slug, url, prs: open.data.map(toOpenPr) } : undefined
   return {
