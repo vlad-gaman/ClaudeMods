@@ -53,6 +53,8 @@ The words the code uses. Use these terms in names, comments, issues and replies.
 ## Open PRs
 
 - **Branch PR**: the open PR for the current branch, marked in the pane.
+- **Card**: one of the boxes in the Open PRs pane: **This session**, **Other open PRs**, and **CLI errors**. The first two share one look: a header, a status bar, a legend, and the branches or PRs.
+- **Pane model**: what the Open PRs pane shows, worked out from the mod's atoms: loading, failed, no remote, or ready with its two cards. The view only draws it.
 - **Run**: a pipeline run (GitHub check or Azure pipeline) shown with its state.
 
 ## Model Router

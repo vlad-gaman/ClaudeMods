@@ -3,40 +3,13 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import { azureProvider } from './azure'
 import { githubProvider } from './github'
-import { LIMIT, type Port, type Provider, type SessionBranch, type Snapshot, worst } from './provider'
+import type { Port, Provider, SessionBranch, Snapshot } from './provider'
 import { type Remote, remoteOf } from './remote'
-import { type IconName, iconSvg, progressSvg, statusBarSvg } from './icons'
 import { listWorktrees, sessionBranchesOf } from './worktrees'
 import { type CliFailure, failureOf, thrownFailureOf, withFailure } from './cli-log'
-import {
-  type Counted,
-  RUN_GLYPH,
-  bar,
-  legendLabel,
-  statusLabel,
-  unresolvedLabel,
-  STATUS_WIDTH,
-  TONE,
-  ciSummary,
-  ciTotals,
-  clockOf,
-  failureKind,
-  groupByStatus,
-  legendText,
-  noun,
-  sessionCounted,
-  sessionRows,
-  type SessionRow,
-  statusBar,
-  statusCounts,
-  statusLine,
-  statusOf,
-  threadSummary,
-  threadTotals,
-  type Threads,
-  unresolvedText,
-} from './cards'
-import type { OpenPr, Run } from '../types'
+import { paneModelOf } from './pane-model'
+import { pane } from './view'
+import type { Run } from '../types'
 
 const repo = atom({ plugin: 'open-prs', key: 'repo' } as const, null)
 const branchPr = atom({ plugin: 'open-prs', key: 'branchPr' } as const, null)
@@ -218,23 +191,10 @@ async function refreshNow($: EngineInterface, s: State) {
   }
 }
 
-const RUN_TONE = {
-  queued: 'inactive',
-  running: 'suggestion',
-  succeeded: 'success',
-  partial: 'warning',
-  failed: 'error',
-  cancelled: 'inactive',
-} as const
-
 /** Flips a card between open and collapsed. Called from a press only, never from a render. */
 function toggle($: EngineInterface, id: string) {
   return update($, collapsed, ids => (ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]))
 }
-
-const STATUS_ICON: Partial<Record<string, IconName>> = { changes: 'changes', required: 'required', approved: 'approved', draft: 'draft', none: 'branch', merged: 'merged', closed: 'changes' }
-
-const RULE = '─'.repeat(30)
 
 export const register: Register = on => {
   const s: State = {
@@ -283,21 +243,8 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const resolved = $.ui.resolve(e)
-    const { Box, Button, Link, Text } = resolved
     const Svg = e.surface === 'desktop' && 'Svg' in resolved ? resolved.Svg : null
-    // The desktop draws a Lucide icon in the tone's colour; every other surface keeps the glyph text.
-    const lead = (key: string, icon: IconName | null, tone: string | undefined, glyphText: string, label: string) =>
-      Svg && icon ? (
-        <Box key={key} flexDirection="row" columnGap={1}>
-          <Svg source={iconSvg(icon, tone ?? 'inactive')} alt={label} width={14} height={14} />
-          <Text color={tone}>{label}</Text>
-        </Box>
-      ) : (
-        <Text key={key} color={tone}>
-          {glyphText}
-        </Text>
-      )
-    const [loaded, shown, mine, branches, ownRuns, failed, refreshing, note, errors, folded] = await Promise.all([
+    const [isLoaded_, repo_, branchPr_, branches, branchRuns_, failedCli_, isRefreshing_, remoteNote_, cliErrors_, collapsed_] = await Promise.all([
       read($, isLoaded),
       read($, repo),
       read($, branchPr),
@@ -309,235 +256,22 @@ export const register: Register = on => {
       read($, cliErrors),
       read($, collapsed),
     ])
-    const isFolded = (id: string) => folded.includes(id)
-    const refreshButton = (
-      <Box flexDirection="row" columnGap={1}>
-        <Button key="refresh" label="Refresh" onPress={() => void refreshNow($, s)} />
-        {refreshing ? <Text dimColor>Refreshing…</Text> : null}
-      </Box>
-    )
-    const cardHead = (id: string, title: string, meta: string) => (
-      <Box flexDirection="row" columnGap={1} justifyContent={Svg ? 'space-between' : undefined}>
-        <Button key={`card-${id}`} plain label={`${isFolded(id) ? '▸' : '▾'} ${title}`} onPress={() => void toggle($, id)} />
-        <Text dimColor>{meta}</Text>
-      </Box>
-    )
-    const statusRow = (items: Counted[]) =>
-      Svg ? (
-        <Svg
-          key="status-bar"
-          source={statusBarSvg(statusBar(statusCounts(items), STATUS_WIDTH).map(segment => ({ tone: TONE[segment.key], width: segment.width, isStriped: segment.key === 'none' })))}
-          alt="status bar"
-          height={8}
-        />
-      ) : (
-        <Box flexDirection="row">
-          {statusBar(statusCounts(items), STATUS_WIDTH).map(segment => (
-            <Text key={`segment-${segment.key}`} color={TONE[segment.key]}>
-              {(segment.key === 'none' ? '▒' : '█').repeat(segment.width)}
-            </Text>
-          ))}
-        </Box>
-      )
-    const progressRow = (name: string, done: number, total: number, tone: string, text: string) =>
-      Svg ? (
-        <Box key={`progress-${name}`} flexDirection="row" columnGap={1}>
-          <Text dimColor>{name}</Text>
-          <Box flexGrow={1}>
-            <Svg source={progressSvg(done, total, tone, true)} alt={`${name} progress`} height={6} />
-          </Box>
-          <Text dimColor>{text}</Text>
-        </Box>
-      ) : (
-        <Text key={`progress-${name}`}>{text}</Text>
-      )
-    const summary = (name: 'threads' | 'ci', totals: { resolved: number; total: number } | { ok: number; total: number }) => {
-      const done = 'ok' in totals ? totals.ok : totals.resolved
-      return Svg ? progressRow(name, done, totals.total, done === totals.total && totals.total > 0 ? 'success' : 'warning', `${done}/${totals.total}`) : <Text>{name === 'ci' ? ciSummary({ ok: done, total: totals.total }) : threadSummary({ resolved: done, total: totals.total })}</Text>
-    }
-    const legendRow = (items: Counted[]) => (
-      <Box flexDirection="row" columnGap={1}>
-        {statusCounts(items).map(count =>
-          lead(`legend-${count.key}`, STATUS_ICON[count.key] ?? null, TONE[count.key], legendText(count), legendLabel(count)),
-        )}
-      </Box>
-    )
-    const threadBlock = (threads: Threads) =>
-      threads ? (
-        <Box flexDirection="column">
-          <Box flexDirection="row" columnGap={1}>
-            {Svg ? (
-              <Svg source={progressSvg(threads.resolved, threads.total, threads.resolved === threads.total ? 'success' : 'warning')} alt="threads progress" width={120} height={6} />
-            ) : (
-              <Text color={threads.resolved === threads.total ? 'success' : 'warning'}>{bar(threads.resolved, threads.total)}</Text>
-            )}
-            <Text dimColor>{`${threads.resolved}/${threads.total} resolved`}</Text>
-          </Box>
-          {lead('unresolved', 'message', 'warning', unresolvedText(threads) ?? '', unresolvedLabel(threads) ?? '')}
-        </Box>
-      ) : null
-    const chips = (runs: Run[]) =>
-      runs.length === 0 ? null : (
-        <Box flexDirection="row" columnGap={1} flexWrap={Svg ? 'wrap' : undefined} alignItems={Svg ? 'flex-start' : undefined}>
-          {runs.map((run, i) => (
-            Svg ? (
-              <Box key={`run-${i}`} flexDirection="row" columnGap={1}>
-                <Svg source={iconSvg(run.state, RUN_TONE[run.state])} alt={run.state} width={14} height={14} />
-                <Link href={run.url} label={run.name} />
-              </Box>
-            ) : (
-              <Text key={`run-${i}`} backgroundColor={RUN_TONE[run.state]}>
-                {`${RUN_GLYPH[run.state]} ${run.name}`}
-              </Text>
-            )
-          ))}
-        </Box>
-      )
-    const branchRow = (row: SessionRow) =>
-      Svg ? (
-        <Box key={`branch-${row.branch}`} flexDirection="column">
-          <Box flexDirection="row" justifyContent="space-between" columnGap={1}>
-            <Box flexDirection="column">
-              <Box flexDirection="row" columnGap={1}>
-                {row.pr ? row.pr.url ? <Link href={row.pr.url} label={`#${row.pr.number}`} /> : <Text color="suggestion">{`#${row.pr.number}`}</Text> : null}
-                <Text bold>{row.pr ? row.pr.title : row.branch}</Text>
-              </Box>
-              <Box flexDirection="row" columnGap={1}>
-                <Text dimColor>{row.pr ? row.branch : ''}</Text>
-                {row.path ? <Text dimColor>{row.path}</Text> : <Text color="warning">no worktree</Text>}
-              </Box>
-            </Box>
-            <Box flexDirection="column" alignItems="flex-end" flexShrink={0}>
-              {lead('status', STATUS_ICON[row.pr?.status ?? 'none'] ?? null, TONE[row.pr?.status ?? 'none'], statusLine(row.pr?.status ?? 'none'), statusLabel(row.pr?.status ?? 'none'))}
-              {row.threads ? lead('unresolved', 'message', 'warning', unresolvedText(row.threads) ?? '', unresolvedLabel(row.threads) ?? '') : null}
-            </Box>
-          </Box>
-          {chips(row.runs)}
-          {row.threads ? (
-            <Box flexDirection="row" columnGap={1}>
-              <Svg source={progressSvg(row.threads.resolved, row.threads.total, row.threads.resolved === row.threads.total ? 'success' : 'warning')} alt="threads progress" width={120} height={6} />
-              <Text dimColor>{`${row.threads.resolved}/${row.threads.total} resolved`}</Text>
-            </Box>
-          ) : null}
-        </Box>
-      ) : (
-      <Box key={`branch-${row.branch}`} flexDirection="column">
-        {row.pr ? (
-          <Box flexDirection="row" columnGap={1}>
-            {row.pr.url ? <Link href={row.pr.url} label={`#${row.pr.number}`} /> : <Text>{`#${row.pr.number}`}</Text>}
-            <Text>{row.pr.title}</Text>
-          </Box>
-        ) : null}
-        {lead('branch', 'branch', 'inactive', `⎇ ${row.branch}`, row.branch)}
-        {row.path ? <Text dimColor>{row.path}</Text> : <Text color="warning">no worktree</Text>}
-        {lead('status', STATUS_ICON[row.pr?.status ?? 'none'] ?? null, TONE[row.pr?.status ?? 'none'], statusLine(row.pr?.status ?? 'none'), statusLabel(row.pr?.status ?? 'none'))}
-        {threadBlock(row.threads)}
-        {chips(row.runs)}
-      </Box>
-      )
-    const prRow = (pr: OpenPr) => (
-      <Box key={`pr-${pr.number}`} flexDirection="column">
-        <Box flexDirection="row" columnGap={1}>
-          <Link href={pr.url} label={`#${pr.number}`} />
-          <Text bold={Boolean(Svg)}>{pr.title}</Text>
-        </Box>
-        <Text dimColor>{pr.comments === null ? pr.author : `${pr.author} · ${noun(pr.comments, 'comment', 'comments')}`}</Text>
-        {threadBlock(pr.threads)}
-        {chips(pr.runs)}
-      </Box>
-    )
-    const errorsCard =
-      errors.length === 0 ? null : (
-        <Box borderStyle="round" flexDirection="column">
-          <Box flexDirection="row" columnGap={1} justifyContent={Svg ? 'space-between' : undefined}>
-            <Box flexDirection="row" columnGap={1}>
-              <Button key="card-errors" plain label={`${isFolded('errors') ? '▸' : '▾'} CLI errors`} onPress={() => void toggle($, 'errors')} />
-              <Text dimColor>{String(errors.length)}</Text>
-            </Box>
-            <Button key="close-errors" plain label="Close" onPress={() => void update($, cliErrors, () => [])} />
-          </Box>
-          {isFolded('errors') ? null : (
-            <Box flexDirection="column">
-              {errors.map((failure, i) => (
-                <Box key={`failure-${i}`} flexDirection="column">
-                  {i > 0 ? <Text dimColor>{RULE}</Text> : null}
-                  <Text color="error">{`• ${failure.command}`}</Text>
-                  <Text color="error">{`${failureKind(failure)} · ${clockOf(failure.at)}`}</Text>
-                  <Text dimColor>{failure.message}</Text>
-                </Box>
-              ))}
-            </Box>
-          )}
-        </Box>
-      )
-
-    if (!loaded) return <Text dimColor>Loading…</Text>
-    if (!shown && failed)
-      return (
-        <Box flexDirection="column" rowGap={1}>
-          <Text dimColor>{`Couldn't load PRs: ${failed} failed or timed out. Will retry.`}</Text>
-          {refreshButton}
-          {errorsCard}
-        </Box>
-      )
-    if (!shown) return <Text dimColor>{`No GitHub or Azure DevOps remote here (${note}).`}</Text>
-
-    const rows = sessionRows(branches, shown.prs, mine, ownRuns)
-    const sessionStatuses = sessionCounted(rows)
-    // The PRs of this session's branches sit in the session card, so Other lists the rest.
-    const sessionNumbers = rows.flatMap(row => (row.pr ? [row.pr.number] : []))
-    const others = shown.prs.filter(pr => !sessionNumbers.includes(pr.number))
-    const listed = others.slice(0, LIMIT)
-    const listedStatuses = listed.map(pr => statusOf(pr))
-    const count = others.length > LIMIT ? `${LIMIT}+` : String(others.length)
-
-    return (
-      <Box flexDirection="column" rowGap={1}>
-        <Box flexDirection="row" columnGap={1}>
-          <Link href={shown.url} label={shown.slug} />
-          {refreshButton}
-        </Box>
-        <Box borderStyle="round" flexDirection="column">
-          {cardHead('session', 'This session', noun(rows.length, 'branch', 'branches'))}
-          {isFolded('session') ? (
-            <Box flexDirection="column">
-              {statusRow(sessionStatuses)}
-              {summary('threads', threadTotals(rows.map(row => row.threads)))}
-              {summary('ci', ciTotals(rows.map(row => worst(row.runs))))}
-            </Box>
-          ) : (
-            <Box flexDirection="column" rowGap={1}>
-              {statusRow(sessionStatuses)}
-              {legendRow(sessionStatuses)}
-              {rows.length === 0 ? <Text dimColor>No branch in this session.</Text> : null}
-              {rows.map(branchRow)}
-            </Box>
-          )}
-        </Box>
-        <Box borderStyle="round" flexDirection="column">
-          {cardHead('other', 'Other open PRs', `${count} open`)}
-          {isFolded('other') ? (
-            <Box flexDirection="column">
-              {statusRow(listedStatuses)}
-              {summary('threads', threadTotals(listed.map(pr => pr.threads)))}
-              {summary('ci', ciTotals(listed.map(pr => pr.run)))}
-            </Box>
-          ) : (
-            <Box flexDirection="column" rowGap={1}>
-              {statusRow(listedStatuses)}
-              {legendRow(listedStatuses)}
-              {listed.length === 0 ? <Text dimColor>No open PRs.</Text> : null}
-              {groupByStatus(listed).map(group => (
-                <Box key={`group-${group.status}`} flexDirection="column">
-                  {lead('group', STATUS_ICON[group.status] ?? null, TONE[group.status], statusLine(group.status), statusLabel(group.status))}
-                  {group.prs.map(prRow)}
-                </Box>
-              ))}
-            </Box>
-          )}
-        </Box>
-        {errorsCard}
-      </Box>
-    )
+    const model = paneModelOf({
+      isLoaded: isLoaded_,
+      repo: repo_,
+      branchPr: branchPr_,
+      sessionBranches: branches,
+      branchRuns: branchRuns_,
+      failedCli: failedCli_,
+      isRefreshing: isRefreshing_,
+      remoteNote: remoteNote_,
+      cliErrors: cliErrors_,
+      collapsed: collapsed_,
+    })
+    return pane(resolved, Svg, model, {
+      refresh: () => void refreshNow($, s),
+      toggle: id => void toggle($, id),
+      closeErrors: () => void update($, cliErrors, () => []),
+    })
   })
 }
