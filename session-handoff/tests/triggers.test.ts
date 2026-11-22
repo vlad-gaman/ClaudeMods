@@ -7,6 +7,7 @@ const MIN = 60000
 // A mock clock: `after` records timers, `tick` runs the ones that are due.
 const setup = (
   over: { hasOpenView?: boolean; tokens?: number; run?: () => Promise<void> } = {},
+  timing = { cacheMinutes: 60, leadMinutes: 5 },
 ) => {
   const state = { now: 0, hasOpenView: over.hasOpenView ?? false, tokens: over.tokens ?? 0 }
   const timers: { at: number; fn: () => void; isCancelled: boolean }[] = []
@@ -25,7 +26,7 @@ const setup = (
         await over.run?.()
       },
     },
-    { cacheMinutes: 60, leadMinutes: 5, contextTokens: 250000 },
+    { ...timing, contextTokens: 250000 },
   )
   const tick = async (ms: number) => {
     state.now += ms
@@ -45,6 +46,17 @@ test('the cache handoff fires once, lifetime minus lead after a turn', async () 
   await tick(120 * MIN)
   expect(runs).toEqual(['cache'])
 })
+
+for (const [cache, lead, wait] of [[90, 5, 85], [10, 5, 5], [5, 5, 1]] as [number, number, number][]) {
+  test(`the cache wait is lifetime ${cache} minus lead ${lead}, at least a minute (${wait})`, async () => {
+    const { triggers, runs, tick } = setup({}, { cacheMinutes: cache, leadMinutes: lead })
+    await triggers.onTurnComplete()
+    await tick(wait * MIN - 1)
+    expect(runs).toEqual([])
+    await tick(1)
+    expect(runs).toEqual(['cache'])
+  })
+}
 
 test('a new turn cancels the cache timer; completing re-arms it', async () => {
   const { triggers, runs, tick } = setup()
