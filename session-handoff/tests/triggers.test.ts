@@ -32,7 +32,7 @@ const setup = (
     for (const t of timers) if (!t.isCancelled && t.at <= state.now) { t.isCancelled = true; t.fn() }
     for (let i = 0; i < 10; i++) await Promise.resolve()
   }
-  return { triggers, state, runs, tick, timers }
+  return { triggers, state, runs, tick }
 }
 
 test('the cache handoff fires once, lifetime minus lead after a turn', async () => {

@@ -23,6 +23,7 @@ import { savePlan } from './save'
 import { failedPatch, stepList, withStep } from './steps'
 import { raceSummary, summaryDetail, summaryText } from './summary'
 import { createTriggers } from './triggers'
+import type { TriggerOptions } from './triggers'
 import { verifySaved } from './verify'
 import { band } from './view'
 
@@ -30,8 +31,6 @@ const view = atom({ plugin: 'session-handoff', key: 'view' } as const, null)
 
 /** State of one mod instance, created per `register` call. */
 type Run = { id: number; triggers: ReturnType<typeof createTriggers> | null }
-
-type TriggerOptions = Parameters<typeof createTriggers>[1]
 
 // The panel outlives a restart: a finished or dismissed handoff is kept in the
 // plugin's store, and put back on `session.start`.
