@@ -4,7 +4,6 @@ import type { EngineInterface as Engine, Register } from 'claude-code'
 import type { HandoffStep, HandoffView } from '../types'
 import {
   CACHE_TTL_MIN,
-  cacheWaitMs,
   CONTEXT_THRESHOLD,
   RUN_BEFORE_COLD_MIN,
   SUMMARY_PROMPT,
@@ -23,19 +22,16 @@ import {
 import { savePlan } from './save'
 import { failedPatch, stepList, withStep } from './steps'
 import { raceSummary, summaryDetail, summaryText } from './summary'
-import { contextTrigger } from './trigger'
+import { createTriggers } from './triggers'
 import { verifySaved } from './verify'
 import { band } from './view'
 
 const view = atom({ plugin: 'session-handoff', key: 'view' } as const, null)
 
 /** State of one mod instance, created per `register` call. */
-type Run = {
-  id: number
-  isRunning: boolean
-  cacheTimer: { cancel: () => void } | null
-  isContextArmed: boolean
-}
+type Run = { id: number; triggers: ReturnType<typeof createTriggers> | null }
+
+type TriggerOptions = Parameters<typeof createTriggers>[1]
 
 // The panel outlives a restart: a finished or dismissed handoff is kept in the
 // plugin's store, and put back on `session.start`.
@@ -62,8 +58,6 @@ async function runHandoff(
   run: Run,
   trigger: HandoffView['trigger'],
 ) {
-  if (run.isRunning) return
-  run.isRunning = true
   const id = ++run.id
   await update($, view, () => ({
     id,
@@ -156,9 +150,24 @@ async function runHandoff(
   } catch (error) {
     await patch($, id, v => ({ ...v, ...failedPatch(v.steps, step, error) }))
   } finally {
-    run.isRunning = false
     await persist($)
   }
+}
+
+// The triggers are built on the first hook, once there is an engine handle.
+function triggersOf($: Engine, run: Run, options: TriggerOptions) {
+  return (run.triggers ??= createTriggers(
+    {
+      after: (ms, fn) => $.clock.after(ms, fn),
+      hasOpenView: async () => {
+        const current = await read($, view)
+        return current !== null && !current.isDismissed
+      },
+      contextTokens: async () => (await $.session.usage()).context.tokens ?? 0,
+      run: trigger => runHandoff($, run, trigger),
+    },
+    options,
+  ))
 }
 
 // The engine checks type and `min` against plugin.json and fills in defaults
@@ -170,7 +179,8 @@ export const register: Register = (on, options) => {
   const cacheMinutes = number(options.cache_minutes, CACHE_TTL_MIN)
   const contextTokens = number(options.context_tokens, CONTEXT_THRESHOLD)
   const leadMinutes = number(options.lead_minutes, RUN_BEFORE_COLD_MIN)
-  const run: Run = { id: 0, isRunning: false, cacheTimer: null, isContextArmed: true }
+  const run: Run = { id: 0, triggers: null }
+  const triggerOptions: TriggerOptions = { cacheMinutes, leadMinutes, contextTokens }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -182,41 +192,21 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'handoff-session' }, async $ => {
-    if (run.isRunning) return { text: 'A handoff is already being written.' }
-    void runHandoff($, run, 'command')
+    const triggers = triggersOf($, run, triggerOptions)
+    if (triggers.isRunning()) return { text: 'A handoff is already being written.' }
+    void triggers.start('command')
     return { text: 'Writing the handoff. Progress is shown above the prompt.' }
   })
 
   on('turn.start', ($, e, next) => {
-    if (e.agentId === undefined) {
-      run.cacheTimer?.cancel()
-      run.cacheTimer = null
-    }
+    if (e.agentId === undefined) triggersOf($, run, triggerOptions).onTurnStart()
     return next(e)
   })
 
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
     if (e.agentId !== undefined) return result
-
-    // Trigger 2: the cache goes cold `lead_minutes` minutes from now.
-    run.cacheTimer?.cancel()
-    const wait = cacheWaitMs(cacheMinutes, leadMinutes)
-    run.cacheTimer = $.clock.after(wait, () => {
-      run.cacheTimer = null
-      void (async () => {
-        if (run.isRunning) return
-        const current = await read($, view)
-        if (current && !current.isDismissed) return
-        await runHandoff($, run, 'cache')
-      })()
-    })
-
-    // Trigger 3: the context passes the threshold (re-armed once it falls).
-    const { context } = await $.session.usage()
-    const trigger = contextTrigger(run.isContextArmed, context.tokens ?? 0, contextTokens)
-    run.isContextArmed = trigger.isArmed
-    if (trigger.isFired) void runHandoff($, run, 'context')
+    await triggersOf($, run, triggerOptions).onTurnComplete()
     return result
   })
 
