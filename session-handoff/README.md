@@ -25,7 +25,7 @@ It starts in one of three ways (the trigger, named in the file):
 
 - `command`: you type `/handoff-session`.
 - `cache`: with the default options, 55 minutes after a turn ends, 5 minutes before the prompt cache goes cold (cache lifetime minus lead time). A new turn cancels it. It is skipped while an earlier handoff is still showing.
-- `context`: the context passes 250k tokens. It fires once, and arms again when the context falls below 80% of the threshold (200k by default).
+- `context`: the context passes 250k tokens. It fires once, and arms again when the context falls below 80% of the threshold (200k by default). If a handoff is already running when it fires, it stays armed and fires after the next turn.
 
 ## Options
 
@@ -47,4 +47,4 @@ Each must be a number of at least 1; the app refuses a lower value.
 claude plugin test .
 ```
 
-Tests are in `tests/`: the whole run through the hook (`handoff.test.tsx`), the document and its parts (`document.test.ts`), the commands the buttons run (`argv.test.ts`) and the context trigger and the cache wait (`trigger.test.ts`), and the pure run steps (`steps.test.ts`, `summary.test.ts`, `verify.test.ts`, `save.test.ts`). The step names, titles and limits are in `hooks/data.ts`, the document in `hooks/document.ts`, the commands and link in `hooks/argv.ts`, the context trigger in `hooks/trigger.ts`, the run steps in `hooks/steps.ts`, `hooks/summary.ts`, `hooks/verify.ts` and `hooks/save.ts`, the band in `hooks/view.tsx`, and the run and the hooks in `hooks/register.tsx`.
+Tests are in `tests/`: the whole run through the hook (`handoff.test.tsx`), the document and its parts (`document.test.ts`), the commands the buttons run (`argv.test.ts`) and the context trigger and the cache wait (`triggers.test.ts`), and the pure run steps (`steps.test.ts`, `summary.test.ts`, `verify.test.ts`, `save.test.ts`). The step names, titles and limits are in `hooks/data.ts`, the document in `hooks/document.ts`, the commands and link in `hooks/argv.ts`, when a handoff may start (the triggers, run state and timer) in `hooks/triggers.ts`, the run steps in `hooks/steps.ts`, `hooks/summary.ts`, `hooks/verify.ts` and `hooks/save.ts`, the band in `hooks/view.tsx`, and the run and the hooks in `hooks/register.tsx`.

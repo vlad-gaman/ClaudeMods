@@ -1,6 +1,6 @@
 {
   "name": "session-handoff",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "author": { "name": "Vlad Gaman" },
   "description": "Writes a handoff file for the current session automatically on /handoff-session, shortly before the prompt cache goes cold, and when the context grows past a token threshold.",
   "types": "./types/index.d.ts",
